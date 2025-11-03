@@ -1,11 +1,10 @@
 """
 Ứng dụng chuyển đổi địa chỉ 2 cấp
-Giao diện GUI bằng tiếng Việt cho người dùng
+Giao diện GUI bằng tiếng Việt cho người dùng - CustomTkinter version
 """
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import requests
-import json
 import os
 import threading
 import time
@@ -21,150 +20,189 @@ API_ENDPOINT_TEST = "http://localhost:5000/api/convert-batch"
 MAX_BATCH_SIZE = 1000
 BATCH_DELAY_SECONDS = 5
 
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
+
 
 class AddressConverterApp:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self):
+        self.root = ctk.CTk()
         self.root.title("Chuyển đổi địa chỉ 2 cấp")
-        self.root.geometry("700x500")
-        self.root.resizable(False, False)
+        self.root.geometry("800x650")
         
-        self.api_key = tk.StringVar()
-        self.input_file_path = tk.StringVar()
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        
+        self.api_key_var = ctk.StringVar()
+        self.input_file_path = ctk.StringVar()
         self.output_folder = ""
         self.is_converting = False
         
         self.create_widgets()
         
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame = ctk.CTkFrame(self.root, corner_radius=15)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_frame.grid_columnconfigure(1, weight=1)
         
-        title_label = ttk.Label(
-            main_frame, 
+        title_label = ctk.CTkLabel(
+            main_frame,
             text="CHUYỂN ĐỔI ĐỊA CHỈ 2 CẤP",
-            font=("Segoe UI", 16, "bold")
+            font=ctk.CTkFont(size=24, weight="bold")
         )
-        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+        title_label.grid(row=0, column=0, columnspan=3, pady=(20, 30), padx=20)
         
-        ttk.Label(main_frame, text="API Key:", font=("Segoe UI", 10)).grid(
-            row=1, column=0, sticky=tk.W, pady=5
+        ctk.CTkLabel(
+            main_frame,
+            text="API Key:",
+            font=ctk.CTkFont(size=13)
+        ).grid(row=1, column=0, sticky="w", padx=20, pady=(10, 5))
+        
+        self.api_entry = ctk.CTkEntry(
+            main_frame,
+            textvariable=self.api_key_var,
+            width=500,
+            height=35,
+            placeholder_text="Nhập API Key của bạn...",
+            show="•"
         )
-        api_entry = ttk.Entry(main_frame, textvariable=self.api_key, width=50, show="*")
-        api_entry.grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        self.api_entry.grid(row=1, column=1, columnspan=2, sticky="ew", padx=20, pady=(10, 5))
         
-        ttk.Label(main_frame, text="File đầu vào:", font=("Segoe UI", 10)).grid(
-            row=2, column=0, sticky=tk.W, pady=5
+        ctk.CTkLabel(
+            main_frame,
+            text="File đầu vào:",
+            font=ctk.CTkFont(size=13)
+        ).grid(row=2, column=0, sticky="w", padx=20, pady=(10, 5))
+        
+        self.input_entry = ctk.CTkEntry(
+            main_frame,
+            textvariable=self.input_file_path,
+            width=380,
+            height=35,
+            placeholder_text="Chọn file .txt hoặc .xlsx...",
+            state="readonly"
         )
-        input_entry = ttk.Entry(main_frame, textvariable=self.input_file_path, width=40, state="readonly")
-        input_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.input_entry.grid(row=2, column=1, sticky="ew", padx=(20, 10), pady=(10, 5))
         
-        browse_btn = ttk.Button(main_frame, text="Chọn file", command=self.browse_input_file)
-        browse_btn.grid(row=2, column=2, padx=(5, 0), pady=5)
+        self.browse_btn = ctk.CTkButton(
+            main_frame,
+            text="Chọn file",
+            command=self.browse_input_file,
+            width=100,
+            height=35,
+            font=ctk.CTkFont(size=13)
+        )
+        self.browse_btn.grid(row=2, column=2, sticky="e", padx=20, pady=(10, 5))
         
-        ttk.Label(
-            main_frame, 
-            text="(Chỉ hỗ trợ file .txt hoặc .xlsx)", 
-            font=("Segoe UI", 8),
-            foreground="gray"
-        ).grid(row=3, column=1, sticky=tk.W, pady=(0, 10))
+        info_label = ctk.CTkLabel(
+            main_frame,
+            text="(Hỗ trợ file .txt và .xlsx)",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        info_label.grid(row=3, column=1, sticky="w", padx=20, pady=(0, 10))
         
-        self.convert_btn = ttk.Button(
-            main_frame, 
-            text="CHUYỂN ĐỔI", 
+        self.convert_btn = ctk.CTkButton(
+            main_frame,
+            text="CHUYỂN ĐỔI",
             command=self.start_conversion,
-            style="Accent.TButton"
+            width=200,
+            height=45,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color=("#1f6aa5", "#144870"),
+            hover_color=("#144870", "#0d3147")
         )
-        self.convert_btn.grid(row=4, column=0, columnspan=3, pady=15, ipadx=40, ipady=10)
+        self.convert_btn.grid(row=4, column=0, columnspan=3, pady=20)
         
-        separator = ttk.Separator(main_frame, orient="horizontal")
-        separator.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        separator = ctk.CTkFrame(main_frame, height=2, fg_color="gray30")
+        separator.grid(row=5, column=0, columnspan=3, sticky="ew", padx=20, pady=(10, 20))
         
-        ttk.Label(main_frame, text="Kết quả:", font=("Segoe UI", 11, "bold")).grid(
-            row=6, column=0, columnspan=3, sticky=tk.W, pady=(10, 5)
+        ctk.CTkLabel(
+            main_frame,
+            text="Kết quả:",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).grid(row=6, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 10))
+        
+        self.result_textbox = ctk.CTkTextbox(
+            main_frame,
+            width=700,
+            height=200,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            wrap="word"
         )
+        self.result_textbox.grid(row=7, column=0, columnspan=3, sticky="ew", padx=20, pady=(0, 10))
+        self.result_textbox.configure(state="disabled")
         
-        result_frame = ttk.Frame(main_frame)
-        result_frame.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-        
-        self.result_text = tk.Text(
-            result_frame, 
-            height=10, 
-            width=70, 
-            state="disabled",
-            font=("Consolas", 9),
-            wrap=tk.WORD
-        )
-        self.result_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=self.result_text.yview)
-        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        self.result_text.configure(yscrollcommand=scrollbar.set)
-        
-        self.open_folder_btn = ttk.Button(
+        self.open_folder_btn = ctk.CTkButton(
             main_frame,
             text="Mở thư mục kết quả",
             command=self.open_output_folder,
+            width=180,
+            height=35,
+            font=ctk.CTkFont(size=13),
             state="disabled"
         )
-        self.open_folder_btn.grid(row=8, column=0, columnspan=3, pady=10)
+        self.open_folder_btn.grid(row=8, column=0, columnspan=3, pady=(10, 10))
         
-        self.progress_label = ttk.Label(
+        self.progress_label = ctk.CTkLabel(
             main_frame,
             text="",
-            font=("Segoe UI", 9),
-            foreground="#0066cc"
+            font=ctk.CTkFont(size=12),
+            text_color=("#1f6aa5", "#5fb4ff")
         )
-        self.progress_label.grid(row=9, column=0, columnspan=3, pady=(5, 0))
+        self.progress_label.grid(row=9, column=0, columnspan=3, pady=(10, 5))
         
-        self.progress = ttk.Progressbar(
+        self.progress_bar = ctk.CTkProgressBar(
             main_frame,
-            mode="determinate",
-            length=600
+            width=700,
+            height=15,
+            corner_radius=8,
+            mode="determinate"
         )
-        self.progress.grid(row=10, column=0, columnspan=3, pady=5)
+        self.progress_bar.grid(row=10, column=0, columnspan=3, padx=20, pady=(0, 20))
+        self.progress_bar.set(0)
         
     def browse_input_file(self):
         file_path = filedialog.askopenfilename(
             title="Chọn file đầu vào",
             filetypes=[
-                ("Text files", "*.txt"),
                 ("Excel files", "*.xlsx"),
+                ("Text files", "*.txt"),
                 ("All files", "*.*")
             ]
         )
         if file_path:
             self.input_file_path.set(file_path)
             
-    def update_result(self, message, clear=False):
-        self.result_text.configure(state="normal")
+    def update_result_text(self, message, clear=False):
+        self.result_textbox.configure(state="normal")
         if clear:
-            self.result_text.delete("1.0", tk.END)
-        self.result_text.insert(tk.END, message + "\n")
-        self.result_text.see(tk.END)
-        self.result_text.configure(state="disabled")
+            self.result_textbox.delete("0.0", "end")
+        self.result_textbox.insert("end", message + "\n")
+        self.result_textbox.see("end")
+        self.result_textbox.configure(state="disabled")
     
     def update_progress(self, current, total, status=""):
         if total > 0:
             percentage = (current / total) * 100
-            self.progress['value'] = percentage
+            self.progress_bar.set(percentage / 100)
             
             if status:
                 label_text = f"{status} - {current}/{total} ({percentage:.1f}%)"
             else:
                 label_text = f"{current}/{total} ({percentage:.1f}%)"
             
-            self.progress_label.config(text=label_text)
+            self.progress_label.configure(text=label_text)
         else:
-            self.progress['value'] = 0
-            self.progress_label.config(text=status)
+            self.progress_bar.set(0)
+            self.progress_label.configure(text=status)
         
     def start_conversion(self):
         if self.is_converting:
             messagebox.showwarning("Cảnh báo", "Đang xử lý, vui lòng đợi!")
             return
             
-        api_key = self.api_key.get().strip()
+        api_key = self.api_key_var.get().strip()
         input_file = self.input_file_path.get().strip()
         
         if not api_key:
@@ -417,15 +455,8 @@ class AddressConverterApp:
 
 
 def main():
-    root = tk.Tk()
-    
-    style = ttk.Style()
-    style.theme_use('vista')
-    style.configure("Accent.TButton", font=("Segoe UI", 11, "bold"))
-    
-    app = AddressConverterApp(root)
-    
-    root.mainloop()
+    app = AddressConverterApp()
+    app.root.mainloop()
 
 
 if __name__ == "__main__":

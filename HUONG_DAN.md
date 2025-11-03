@@ -1,5 +1,13 @@
 # HƯỚNG DẪN SỬ DỤNG - Ứng dụng Chuyển đổi địa chỉ 2 cấp
 
+## Giới thiệu giao diện
+
+Ứng dụng sử dụng **CustomTkinter** - framework UI hiện đại với:
+- Light theme sáng sủa, dễ nhìn
+- Rounded corners và smooth animations
+- Professional color scheme (Blue theme)
+- Responsive layout với window size 800x650
+
 ## Cài đặt môi trường phát triển
 
 ### Bước 1: Tạo môi trường conda
@@ -13,6 +21,14 @@ conda activate dia-chi-2-cap
 ```powershell
 pip install -r requirements.txt
 ```
+
+Các thư viện chính:
+- **customtkinter 5.2.2**: Modern UI components
+- **darkdetect**: Auto theme detection
+- **requests**: API communication
+- **openpyxl**: Excel processing
+- **flask**: Development test server
+- **pyinstaller**: Portable exe builder
 
 ## Chạy ứng dụng trong môi trường development
 

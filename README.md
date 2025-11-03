@@ -1,9 +1,10 @@
 # Ứng dụng Chuyển đổi địa chỉ 2 cấp
 
-Ứng dụng Windows portable để chuyển đổi địa chỉ từ định dạng cũ sang định dạng mới (2 cấp) sử dụng API từ address-converter.io.vn
+Ứng dụng Windows portable với giao diện hiện đại để chuyển đổi địa chỉ từ định dạng cũ sang định dạng mới (2 cấp) sử dụng API từ address-converter.io.vn
 
 ## Tính năng
 
+- ✅ **Giao diện hiện đại với CustomTkinter**: Light theme, rounded corners, professional UI
 - ✅ Giao diện tiếng Việt đơn giản, dễ sử dụng
 - ✅ Hỗ trợ file đầu vào: TXT và Excel (.xlsx)
 - ✅ **Xử lý tự động với file lớn**: Tự động chia nhỏ và gửi nhiều batch khi vượt quá 1000 địa chỉ
@@ -30,6 +31,13 @@ conda activate dia-chi-2-cap
 ```powershell
 pip install -r requirements.txt
 ```
+
+Requirements bao gồm:
+- **customtkinter**: Modern UI framework với dark theme
+- **requests**: HTTP client cho API calls
+- **openpyxl**: Excel file handling
+- **flask**: Test server
+- **pyinstaller**: Build portable exe
 
 ### Bước 3: Tạo file test
 ```powershell

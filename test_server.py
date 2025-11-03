@@ -9,7 +9,7 @@ import random
 app = Flask(__name__)
 
 last_request_time = {}
-RATE_LIMIT_SECONDS = 300  # 5 minutes
+RATE_LIMIT_SECONDS = 10  # 10 seconds
 
 TEST_API_KEY = "testing-chuyen-doi-2-cap"
 
@@ -65,7 +65,7 @@ def convert_batch():
             retry_after = int(RATE_LIMIT_SECONDS - time_diff)
             return jsonify({
                 "success": False,
-                "error": f"Chức năng chuyển đổi hàng loạt chỉ cho phép 1 lần sử dụng trong 5 phút. Vui lòng thử lại sau {retry_after} giây.",
+                "error": f"Chức năng chuyển đổi hàng loạt chỉ cho phép 1 lần sử dụng trong {RATE_LIMIT_SECONDS} giây. Vui lòng thử lại sau {retry_after} giây.",
                 "rateLimited": True,
                 "retryAfter": retry_after
             }), 429
