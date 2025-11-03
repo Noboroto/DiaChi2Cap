@@ -9,9 +9,12 @@ import random
 app = Flask(__name__)
 
 last_request_time = {}
-RATE_LIMIT_SECONDS = 10  # 10 seconds
+RATE_LIMIT_SECONDS = 10
 
 TEST_API_KEY = "testing-chuyen-doi-2-cap"
+
+SIMULATE_BALANCE_ERROR = True
+BALANCE_ERROR_ADDRESS = "54 Nguyễn Lương Bằng, Hoà Khánh Bắc, Liên Chiểu, Đà Nẵng"
 
 MOCK_ADDRESSES_DB = {
     "470 Đ. Trần Đại Nghĩa, Hoà Hải, Ngũ Hành Sơn, Đà Nẵng": "470 Đ. Trần Đại Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, Thành phố Đà Nẵng",
@@ -79,7 +82,16 @@ def convert_batch():
     for addr in addresses:
         addr_stripped = addr.strip()
         
-        if addr_stripped in MOCK_ADDRESSES_DB:
+        if SIMULATE_BALANCE_ERROR and addr_stripped == BALANCE_ERROR_ADDRESS:
+            results.append({
+                "original": addr_stripped,
+                "converted": "",
+                "error": "Số dư không đủ. Cần 150đ, còn lại 0đ",
+                "success": False,
+                "premium_exchange": False
+            })
+            failed += 1
+        elif addr_stripped in MOCK_ADDRESSES_DB:
             results.append({
                 "original": addr_stripped,
                 "converted": MOCK_ADDRESSES_DB[addr_stripped],
@@ -109,6 +121,34 @@ def convert_batch():
             "results": results,
             "totalCost": total_cost,
             "remainingBalance": 100000 - total_cost
+        }
+    }), 200
+
+
+@app.route('/api/account-status', methods=['GET'])
+def account_status():
+    api_key = request.args.get('key', '')
+    
+    if not api_key:
+        return jsonify({
+            "success": False,
+            "error": "API key không được để trống"
+        }), 400
+    
+    if api_key != TEST_API_KEY:
+        return jsonify({
+            "success": False,
+            "error": "API key không hợp lệ"
+        }), 401
+    
+    return jsonify({
+        "success": True,
+        "data": {
+            "name": "Tài khoản Test",
+            "balance": 100000,
+            "apiKey": TEST_API_KEY,
+            "createdAt": "2024-01-01T10:00:00.000Z",
+            "updatedAt": "2025-11-03T08:30:00.000Z"
         }
     }), 200
 
