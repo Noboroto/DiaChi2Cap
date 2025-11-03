@@ -42,7 +42,7 @@ class AddressConverterApp:
         
     def create_widgets(self):
         main_frame = ctk.CTkFrame(self.root, corner_radius=15)
-        main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         main_frame.grid_columnconfigure(1, weight=1)
         
         title_label = ctk.CTkLabel(
@@ -126,7 +126,7 @@ class AddressConverterApp:
         self.result_textbox = ctk.CTkTextbox(
             main_frame,
             width=700,
-            height=200,
+            height=165,
             font=ctk.CTkFont(family="Consolas", size=11),
             wrap="word"
         )
@@ -233,7 +233,7 @@ class AddressConverterApp:
         
     def perform_conversion(self, api_key, input_file, file_ext):
         try:
-            self.update_result("Đang đọc file đầu vào...", clear=True)
+            self.update_result_text("Đang đọc file đầu vào...", clear=True)
             self.root.after(0, lambda: self.update_progress(10, 100, "Đọc file đầu vào..."))
             
             if file_ext == '.txt':
@@ -246,17 +246,18 @@ class AddressConverterApp:
                 return
                 
             total_addresses = len(addresses)
-            self.update_result(f"Đã đọc {total_addresses} địa chỉ từ file")
+            self.update_result_text(f"Đã đọc {total_addresses} địa chỉ từ file")
             self.root.after(0, lambda: self.update_progress(20, 100, "Chuẩn bị xử lý..."))
             
             num_batches = (total_addresses + MAX_BATCH_SIZE - 1) // MAX_BATCH_SIZE
             
             if num_batches > 1:
-                self.update_result(f"\n[CẢNH BÁO] File có {total_addresses} địa chỉ, vượt quá giới hạn {MAX_BATCH_SIZE} địa chỉ/lần")
-                self.update_result(f"Hệ thống sẽ tự động chia thành {num_batches} lần gửi")
-                self.update_result(f"Thời gian chờ giữa các lần: {BATCH_DELAY_SECONDS} giây\n")
+                self.update_result_text(f"\n[CẢNH BÁO] File có {total_addresses} địa chỉ, vượt quá giới hạn {MAX_BATCH_SIZE} địa chỉ/lần")
+                self.update_result_text(f"Hệ thống sẽ tự động chia thành {num_batches} lần gửi")
+                self.update_result_text(f"Thời gian chờ giữa các lần: {BATCH_DELAY_SECONDS} giây\n")
             
             api_endpoint = API_ENDPOINT_TEST if api_key == TEST_API_KEY else API_ENDPOINT_PROD
+
             
             all_results = []
             total_successful = 0
@@ -269,7 +270,7 @@ class AddressConverterApp:
                 
                 batch_info = f"Lần {batch_num + 1}/{num_batches}" if num_batches > 1 else ""
                 if batch_info:
-                    self.update_result(f"{batch_info}: Xử lý địa chỉ {start_idx + 1} đến {end_idx}")
+                    self.update_result_text(f"{batch_info}: Xử lý địa chỉ {start_idx + 1} đến {end_idx}")
                 
                 progress_start = 20 + (batch_num * 70 // num_batches)
                 self.root.after(0, lambda p=progress_start, b=batch_info: self.update_progress(
@@ -290,14 +291,43 @@ class AddressConverterApp:
                 
                 if not result_data.get("success", False):
                     error_msg = result_data.get("error", "Lỗi không xác định")
-                    self.update_result(f"\n[LỖI] {error_msg}")
                     
                     if result_data.get("rateLimited", False):
                         retry_after = result_data.get("retryAfter", 0)
-                        self.update_result(f"Vui lòng thử lại sau {retry_after} giây")
-                    
-                    self.root.after(0, lambda e=error_msg: messagebox.showerror("Lỗi API", e))
-                    return
+                        self.update_result_text(f"\n[RATE LIMIT] {error_msg}")
+                        self.update_result_text(f"Tự động thử lại sau {retry_after} giây...")
+                        
+                        for i in range(retry_after):
+                            time.sleep(1)
+                            remaining = retry_after - i - 1
+                            if remaining > 0:
+                                self.root.after(0, lambda r=remaining: self.progress_label.configure(
+                                    text=f"Rate limited - Chờ {r} giây..."
+                                ))
+                        
+                        self.update_result_text(f"Đang thử lại lần {batch_num + 1}/{num_batches}...")
+                        
+                        response = requests.post(
+                            api_endpoint,
+                            json={
+                                "addresses": batch_addresses,
+                                "key": api_key
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=60
+                        )
+                        
+                        result_data = response.json()
+                        
+                        if not result_data.get("success", False):
+                            error_msg = result_data.get("error", "Lỗi không xác định")
+                            self.update_result_text(f"\n[LỖI] Retry thất bại: {error_msg}")
+                            self.root.after(0, lambda e=error_msg: messagebox.showerror("Lỗi API", e))
+                            return
+                    else:
+                        self.update_result_text(f"\n[LỖI] {error_msg}")
+                        self.root.after(0, lambda e=error_msg: messagebox.showerror("Lỗi API", e))
+                        return
                 
                 data = result_data.get("data", {})
                 batch_successful = data.get("successful", 0)
@@ -309,28 +339,29 @@ class AddressConverterApp:
                 all_results.extend(batch_results)
                 
                 if batch_info:
-                    self.update_result(f"  → Thành công: {batch_successful}, Thất bại: {batch_failed}")
+                    self.update_result_text(f"  → Thành công: {batch_successful}, Thất bại: {batch_failed}")
                 
                 if batch_num < num_batches - 1:
-                    self.update_result(f"Chờ {BATCH_DELAY_SECONDS} giây trước khi gửi lần tiếp theo...")
+                    self.update_result_text(f"Chờ {BATCH_DELAY_SECONDS} giây trước khi gửi lần tiếp theo...")
                     for i in range(BATCH_DELAY_SECONDS):
                         time.sleep(1)
                         remaining = BATCH_DELAY_SECONDS - i - 1
                         if remaining > 0:
-                            self.root.after(0, lambda r=remaining: self.progress_label.config(
+                            self.root.after(0, lambda r=remaining: self.progress_label.configure(
                                 text=f"Chờ {r} giây..."
                             ))
             
             self.root.after(0, lambda: self.update_progress(90, 100, "Đang lưu kết quả..."))
+
             
-            self.update_result(f"\n{'='*50}")
-            self.update_result(f"TỔNG KẾT:")
-            self.update_result(f"  - Tổng số địa chỉ: {total_addresses}")
-            self.update_result(f"  - Thành công: {total_successful}")
-            self.update_result(f"  - Thất bại: {total_failed}")
+            self.update_result_text(f"\n{'='*50}")
+            self.update_result_text(f"TỔNG KẾT:")
+            self.update_result_text(f"  - Tổng số địa chỉ: {total_addresses}")
+            self.update_result_text(f"  - Thành công: {total_successful}")
+            self.update_result_text(f"  - Thất bại: {total_failed}")
             if num_batches > 1:
-                self.update_result(f"  - Số lần gửi: {num_batches}")
-            self.update_result(f"{'='*50}\n")
+                self.update_result_text(f"  - Số lần gửi: {num_batches}")
+            self.update_result_text(f"{'='*50}\n")
             
             input_path = Path(input_file)
             output_folder = input_path.parent / "output"
@@ -345,7 +376,7 @@ class AddressConverterApp:
             else:
                 self.write_excel_output(output_path, all_results)
             
-            self.update_result(f"Đã lưu kết quả tại:\n{output_path}")
+            self.update_result_text(f"Đã lưu kết quả tại:\n{output_path}")
             self.root.after(0, lambda: self.update_progress(100, 100, "Hoàn thành!"))
             
             self.root.after(0, lambda: self.open_folder_btn.configure(state="normal"))
@@ -355,20 +386,20 @@ class AddressConverterApp:
             ))
             
         except requests.exceptions.Timeout:
-            self.update_result("\n[LỖI] Timeout - Không thể kết nối đến API")
+            self.update_result_text("\n[LỖI] Timeout - Không thể kết nối đến API")
             self.root.after(0, lambda: messagebox.showerror("Lỗi", "Không thể kết nối đến API (Timeout)"))
         except requests.exceptions.ConnectionError:
-            self.update_result("\n[LỖI] Không thể kết nối đến server")
+            self.update_result_text("\n[LỖI] Không thể kết nối đến server")
             if api_key == TEST_API_KEY:
-                self.update_result("Hãy chắc chắn test server đang chạy tại http://localhost:5000")
+                self.update_result_text("Hãy chắc chắn test server đang chạy tại http://localhost:5000")
             self.root.after(0, lambda: messagebox.showerror("Lỗi", "Không thể kết nối đến server"))
         except Exception as e:
-            self.update_result(f"\n[LỖI] {str(e)}")
+            self.update_result_text(f"\n[LỖI] {str(e)}")
             self.root.after(0, lambda e=str(e): messagebox.showerror("Lỗi", f"Lỗi xử lý: {e}"))
         finally:
             self.is_converting = False
             self.root.after(0, lambda: self.convert_btn.configure(state="normal"))
-            self.root.after(0, lambda: self.progress_label.config(text=""))
+            self.root.after(0, lambda: self.progress_label.configure(text=""))
             
     def read_txt_file(self, file_path):
         addresses = []
@@ -379,7 +410,7 @@ class AddressConverterApp:
                     if line:
                         addresses.append(line)
         except Exception as e:
-            self.update_result(f"[LỖI] Không thể đọc file txt: {str(e)}")
+            self.update_result_text(f"[LỖI] Không thể đọc file txt: {str(e)}")
         return addresses
         
     def read_excel_file(self, file_path):
@@ -395,7 +426,7 @@ class AddressConverterApp:
                         addresses.append(addr)
             wb.close()
         except Exception as e:
-            self.update_result(f"[LỖI] Không thể đọc file Excel: {str(e)}")
+            self.update_result_text(f"[LỖI] Không thể đọc file Excel: {str(e)}")
         return addresses
         
     def write_txt_output(self, output_path, results):
@@ -408,7 +439,7 @@ class AddressConverterApp:
                         error_msg = result.get("error", "Lỗi không xác định")
                         f.write(f"LỖI: {error_msg}\n")
         except Exception as e:
-            self.update_result(f"[LỖI] Không thể ghi file txt: {str(e)}")
+            self.update_result_text(f"[LỖI] Không thể ghi file txt: {str(e)}")
             
     def write_excel_output(self, output_path, results):
         try:
@@ -445,7 +476,7 @@ class AddressConverterApp:
             wb.save(output_path)
             wb.close()
         except Exception as e:
-            self.update_result(f"[LỖI] Không thể ghi file Excel: {str(e)}")
+            self.update_result_text(f"[LỖI] Không thể ghi file Excel: {str(e)}")
             
     def open_output_folder(self):
         if self.output_folder and os.path.exists(self.output_folder):

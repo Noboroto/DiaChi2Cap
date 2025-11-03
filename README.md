@@ -65,12 +65,31 @@ Khi file đầu vào có **hơn 1000 địa chỉ**, ứng dụng sẽ:
 - Batch 3: Địa chỉ 2001-2500 → Gửi API
 - Tổng hợp và lưu kết quả
 
+### Auto-Retry với Rate Limiting
+Khi gặp lỗi rate limit từ API:
+- 🔄 **Tự động retry**: Không cần can thiệp thủ công
+- ⏱️ **Chờ đúng thời gian**: Đợi đúng số giây mà API yêu cầu (từ `retryAfter`)
+- 📊 **Hiển thị countdown**: Cập nhật real-time thời gian chờ còn lại
+- ✅ **Retry tự động**: Gửi lại request sau khi hết thời gian chờ
+- ⚠️ **Thông báo rõ ràng**: Hiển thị trạng thái rate limit và retry progress
+
+**Ví dụ**: Nếu API trả về rate limit 21 giây:
+```
+[RATE LIMIT] Chức năng chuyển đổi hàng loạt chỉ cho phép 1 lần sử dụng trong 5 phút...
+Tự động thử lại sau 21 giây...
+Rate limited - Chờ 20 giây...
+Rate limited - Chờ 19 giây...
+...
+Đang thử lại lần 1/3...
+```
+
 ### Progress Bar
 Progress bar hiển thị:
 - Phần trăm hoàn thành (0-100%)
 - Trạng thái hiện tại ("Đang đọc file...", "Đang gửi yêu cầu...", v.v.)
 - Số lượng batch đang xử lý (nếu có nhiều batch)
 - Thời gian chờ giữa các batch
+- Countdown khi gặp rate limit
 
 ## Sử dụng
 

@@ -121,6 +121,47 @@ Khi file đầu vào có nhiều hơn 1000 địa chỉ, ứng dụng sẽ:
 
 5. **Tổng hợp kết quả**: Kết hợp kết quả từ tất cả các batch vào một file
 
+### Tính năng Auto-Retry khi Rate Limit
+Khi gặp lỗi rate limit từ API, ứng dụng sẽ:
+
+1. **Phát hiện rate limit**: Nhận diện response có `rateLimited: true`
+
+2. **Hiển thị thông báo**: 
+   ```
+   [RATE LIMIT] Chức năng chuyển đổi hàng loạt chỉ cho phép 1 lần sử dụng trong 5 phút...
+   Tự động thử lại sau 21 giây...
+   ```
+
+3. **Countdown real-time**: Progress bar hiển thị thời gian chờ còn lại
+   ```
+   Rate limited - Chờ 20 giây...
+   Rate limited - Chờ 19 giây...
+   Rate limited - Chờ 18 giây...
+   ```
+
+4. **Tự động retry**: Sau khi hết thời gian chờ, gửi lại request tự động
+   ```
+   Đang thử lại lần 1/3...
+   ```
+
+5. **Xử lý kết quả retry**:
+   - Nếu thành công: Tiếp tục xử lý bình thường
+   - Nếu thất bại: Hiển thị lỗi và dừng
+
+**Lưu ý**: Tính năng này hoàn toàn tự động, không cần can thiệp thủ công!
+   ```
+
+2. **Tự động chia nhỏ**: Chia file thành các batch, mỗi batch tối đa 1000 địa chỉ
+
+3. **Progress bar**: Hiển thị tiến trình xử lý chi tiết
+   - Đọc file: 0-20%
+   - Xử lý các batch: 20-90%
+   - Lưu kết quả: 90-100%
+
+4. **Delay giữa các batch**: Chờ 5 giây giữa mỗi lần gửi để tránh rate limit
+
+5. **Tổng hợp kết quả**: Kết hợp kết quả từ tất cả các batch vào một file
+
 ### Ví dụ xử lý 2500 địa chỉ
 ```
 Đã đọc 2500 địa chỉ từ file
