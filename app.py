@@ -37,6 +37,7 @@ class AddressConverterApp:
         self.input_file_path = ctk.StringVar()
         self.output_folder = ""
         self.is_converting = False
+        self.stop_requested = False
         self.api_key_visible = False
         
         self.account_info = {
@@ -168,47 +169,47 @@ class AddressConverterApp:
         )
         info_label.grid(row=4, column=1, sticky="w", padx=20, pady=(0, 10))
         
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.grid(row=5, column=0, columnspan=3, pady=20)
+        
         self.convert_btn = ctk.CTkButton(
-            main_frame,
+            button_frame,
             text="CHUYỂN ĐỔI",
             command=self.start_conversion,
-            width=200,
+            width=180,
             height=45,
             font=ctk.CTkFont(size=16, weight="bold"),
             fg_color=("#1f6aa5", "#144870"),
             hover_color=("#144870", "#0d3147")
         )
-        self.convert_btn.grid(row=5, column=0, columnspan=3, pady=20)
+        self.convert_btn.grid(row=0, column=1, padx=10)
         
-        separator = ctk.CTkFrame(main_frame, height=2, fg_color="gray30")
-        separator.grid(row=6, column=0, columnspan=3, sticky="ew", padx=20, pady=(10, 20))
-        
-        ctk.CTkLabel(
-            main_frame,
-            text="Kết quả:",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).grid(row=7, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 10))
-        
-        self.result_textbox = ctk.CTkTextbox(
-            main_frame,
-            width=700,
-            height=165,
-            font=ctk.CTkFont(family="Consolas", size=11),
-            wrap="word"
+        self.stop_btn = ctk.CTkButton(
+            button_frame,
+            text="DỪNG",
+            command=self.stop_conversion,
+            width=180,
+            height=45,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color=("#d32f2f", "#b71c1c"),
+            hover_color=("#b71c1c", "#8b0000"),
+            state="disabled"
         )
-        self.result_textbox.grid(row=8, column=0, columnspan=3, sticky="ew", padx=20, pady=(0, 10))
-        self.result_textbox.configure(state="disabled")
+        self.stop_btn.grid(row=0, column=0, padx=10)
         
         self.open_folder_btn = ctk.CTkButton(
-            main_frame,
-            text="Mở thư mục kết quả",
+            button_frame,
+            text="MỞ THƯ MỤC KẾT QUẢ",
             command=self.open_output_folder,
             width=180,
-            height=35,
+            height=45,
             font=ctk.CTkFont(size=13),
             state="disabled"
         )
-        self.open_folder_btn.grid(row=9, column=0, columnspan=3, pady=(10, 10))
+        self.open_folder_btn.grid(row=0, column=2, padx=10)
+        
+        separator = ctk.CTkFrame(main_frame, height=2, fg_color="gray30")
+        separator.grid(row=6, column=0, columnspan=3, sticky="ew", padx=20, pady=(10, 20))
         
         self.progress_label = ctk.CTkLabel(
             main_frame,
@@ -216,7 +217,7 @@ class AddressConverterApp:
             font=ctk.CTkFont(size=12),
             text_color=("#1f6aa5", "#5fb4ff")
         )
-        self.progress_label.grid(row=10, column=0, columnspan=3, pady=(10, 5))
+        self.progress_label.grid(row=7, column=0, columnspan=3, pady=(10, 5))
         
         self.progress_bar = ctk.CTkProgressBar(
             main_frame,
@@ -225,8 +226,24 @@ class AddressConverterApp:
             corner_radius=8,
             mode="determinate"
         )
-        self.progress_bar.grid(row=11, column=0, columnspan=3, padx=20, pady=(0, 20))
+        self.progress_bar.grid(row=8, column=0, columnspan=3, padx=20, pady=(0, 20))
         self.progress_bar.set(0)
+        
+        ctk.CTkLabel(
+            main_frame,
+            text="Kết quả:",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).grid(row=9, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 10))
+        
+        self.result_textbox = ctk.CTkTextbox(
+            main_frame,
+            width=700,
+            height=165,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            wrap="word"
+        )
+        self.result_textbox.grid(row=10, column=0, columnspan=3, sticky="ew", padx=20, pady=(0, 10))
+        self.result_textbox.configure(state="disabled")
         
     def browse_input_file(self):
         file_path = filedialog.askopenfilename(
@@ -297,13 +314,23 @@ class AddressConverterApp:
             return
         
         self.is_converting = True
+        self.stop_requested = False
         self.convert_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
         self.open_folder_btn.configure(state="disabled")
         self.root.after(0, lambda: self.update_progress(0, 100, "Đang khởi tạo..."))
         
         thread = threading.Thread(target=self.perform_conversion, args=(api_key, input_file, file_ext))
         thread.daemon = True
         thread.start()
+
+    def stop_conversion(self):
+        """Request to stop the conversion process"""
+        if self.is_converting:
+            self.stop_requested = True
+            self.update_result_text("\n[DỪNG] Đang dừng quá trình chuyển đổi...")
+            self.update_result_text("Sẽ lưu kết quả đã xử lý...")
+            self.stop_btn.configure(state="disabled")
         
     def perform_conversion(self, api_key, input_file, file_ext):
         try:
@@ -358,6 +385,10 @@ class AddressConverterApp:
             skipped_indices = set()
             
             for batch_num in range(num_batches):
+                if self.stop_requested:
+                    self.update_result_text("\n[DỪNG] Đã dừng tại batch {}/{}".format(batch_num + 1, num_batches))
+                    break
+                
                 start_idx = batch_num * MAX_BATCH_SIZE
                 end_idx = min((batch_num + 1) * MAX_BATCH_SIZE, total_addresses)
                 
@@ -368,9 +399,9 @@ class AddressConverterApp:
                     self.update_result_text(f"{batch_info}: Xử lý địa chỉ {start_idx + 1} đến {end_idx}")
                 
                 retry_count = 0
-                max_retries = 100
+                max_retries = 10000
                 
-                while retry_count < max_retries and batch_items:
+                while retry_count < max_retries and batch_items and not self.stop_requested:
                     progress_start = 20 + (batch_num * 70 // num_batches)
                     retry_info = f" (Retry {retry_count})" if retry_count > 0 else ""
                     self.root.after(0, lambda p=progress_start, b=batch_info, r=retry_info: self.update_progress(
@@ -400,12 +431,16 @@ class AddressConverterApp:
                             self.update_result_text(f"Tự động thử lại sau {retry_after} giây...")
                             
                             for i in range(retry_after):
+                                if self.stop_requested:
+                                    break
                                 time.sleep(1)
                                 remaining = retry_after - i - 1
                                 if remaining > 0:
                                     self.root.after(0, lambda r=remaining: self.progress_label.configure(
                                         text=f"Rate limited - Chờ {r} giây..."
                                     ))
+                            if self.stop_requested:
+                                break
                             continue
                         else:
                             self.update_result_text(f"\n[LỖI] {error_msg}")
@@ -464,7 +499,8 @@ class AddressConverterApp:
                         if batch_items:
                             self.update_result_text(f"Còn lại {len(batch_items)} địa chỉ, tiếp tục xử lý...")
                             retry_count += 1
-                            time.sleep(1)
+                            if not self.stop_requested:
+                                time.sleep(1)
                             continue
                         else:
                             self.update_result_text("Tất cả địa chỉ trong batch đã được xử lý")
@@ -476,8 +512,12 @@ class AddressConverterApp:
                     self.update_result_text(f"\n[CẢNH BÁO] Đã vượt quá số lần retry tối đa ({max_retries})")
                 
                 if batch_num < num_batches - 1:
+                    if self.stop_requested:
+                        break
                     self.update_result_text(f"Chờ {BATCH_DELAY_SECONDS} giây trước khi gửi lần tiếp theo...")
                     for i in range(BATCH_DELAY_SECONDS):
+                        if self.stop_requested:
+                            break
                         time.sleep(1)
                         remaining = BATCH_DELAY_SECONDS - i - 1
                         if remaining > 0:
@@ -485,19 +525,34 @@ class AddressConverterApp:
                                 text=f"Chờ {r} giây..."
                             ))
             
+            for i in range(total_addresses):
+                if i not in results_dict:
+                    results_dict[i] = {
+                        "original": addresses[i],
+                        "converted": "",
+                        "error": "Chưa xử lý (đã dừng)" if self.stop_requested else "Chưa xử lý",
+                        "success": False
+                    }
+            
             all_results = [results_dict[i] for i in range(total_addresses)]
             
             self.root.after(0, lambda: self.update_progress(90, 100, "Đang lưu kết quả..."))
 
             total_skipped = len(skipped_indices)
+            total_not_processed = sum(1 for r in all_results if not r.get("success", False) and "Chưa xử lý" in r.get("error", ""))
             
             self.update_result_text(f"\n{'='*50}")
-            self.update_result_text(f"TỔNG KẾT:")
+            if self.stop_requested:
+                self.update_result_text(f"ĐÃ DỪNG - TỔNG KẾT:")
+            else:
+                self.update_result_text(f"TỔNG KẾT:")
             self.update_result_text(f"  - Tổng số địa chỉ: {total_addresses}")
             self.update_result_text(f"  - Thành công: {total_successful}")
             self.update_result_text(f"  - Thất bại: {total_failed}")
             if total_skipped > 0:
                 self.update_result_text(f"  - Bỏ qua (Số dư không đủ): {total_skipped}")
+            if total_not_processed > 0:
+                self.update_result_text(f"  - Chưa xử lý: {total_not_processed}")
             if num_batches > 1:
                 self.update_result_text(f"  - Số lần gửi: {num_batches}")
             self.update_result_text(f"{'='*50}\n")
@@ -516,13 +571,23 @@ class AddressConverterApp:
                 self.write_excel_output(output_path, all_results, is_multi_column, headers, original_data)
             
             self.update_result_text(f"Đã lưu kết quả tại:\n{output_path}")
-            self.root.after(0, lambda: self.update_progress(100, 100, "Hoàn thành!"))
+            if self.stop_requested:
+                self.root.after(0, lambda: self.update_progress(100, 100, "Đã dừng - Đã lưu kết quả!"))
+            else:
+                self.root.after(0, lambda: self.update_progress(100, 100, "Hoàn thành!"))
             
             self.root.after(0, lambda: self.open_folder_btn.configure(state="normal"))
-            self.root.after(0, lambda s=total_successful, f=total_failed, sk=total_skipped, fn=output_filename: messagebox.showinfo(
-                "Hoàn thành", 
-                f"Chuyển đổi thành công!\n\nThành công: {s}\nThất bại: {f}\nBỏ qua: {sk}\n\nFile kết quả: {fn}"
-            ))
+            
+            if self.stop_requested:
+                self.root.after(0, lambda s=total_successful, f=total_failed, sk=total_skipped, np=total_not_processed, fn=output_filename: messagebox.showinfo(
+                    "Đã dừng", 
+                    f"Đã dừng và lưu kết quả!\n\nThành công: {s}\nThất bại: {f}\nBỏ qua: {sk}\nChưa xử lý: {np}\n\nFile kết quả: {fn}"
+                ))
+            else:
+                self.root.after(0, lambda s=total_successful, f=total_failed, sk=total_skipped, fn=output_filename: messagebox.showinfo(
+                    "Hoàn thành", 
+                    f"Chuyển đổi thành công!\n\nThành công: {s}\nThất bại: {f}\nBỏ qua: {sk}\n\nFile kết quả: {fn}"
+                ))
             
         except requests.exceptions.Timeout:
             self.update_result_text("\n[LỖI] Timeout - Không thể kết nối đến API")
@@ -537,7 +602,9 @@ class AddressConverterApp:
             self.root.after(0, lambda e=str(e): messagebox.showerror("Lỗi", f"Lỗi xử lý: {e}"))
         finally:
             self.is_converting = False
+            self.stop_requested = False
             self.root.after(0, lambda: self.convert_btn.configure(state="normal"))
+            self.root.after(0, lambda: self.stop_btn.configure(state="disabled"))
             self.root.after(0, lambda: self.progress_label.configure(text=""))
             
     def read_txt_file(self, file_path):
