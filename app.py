@@ -16,12 +16,362 @@ from openpyxl.styles import Font, Alignment, PatternFill
 TEST_API_KEY = "testing-chuyen-doi-2-cap"
 API_DOMAIN_PROD = "https://address-converter.io.vn"
 API_DOMAIN_TEST = "http://localhost:5000"
+GOONG_API_KEY = "blank"
+OPENMAP_API_KEY = "A5PFHXxiTe780Z2GZRQjPMjQ5EQaVCsm"
 
 MAX_BATCH_SIZE = 1000
 BATCH_DELAY_SECONDS = 5
+OPENMAP_RATE_LIMIT_DELAY = 0.2
+
+REPLACEMENT_REQUIRES = [
+    ("Quận 02", "Thành phố Thủ Đức"),
+    ("Quận 2", "Thành phố Thủ Đức"),
+    ("Huyện Dăk RLấp", "Huyện Đắk R'Lấp"),
+    ("Xã Ea Bhôk", "Xã Ea BHốk"),
+    ("Huyện Dăk Mil", "Huyện Đắk Mil"),
+    ("Thành phố KonTum" , "Thành phố Kon Tum"),
+    ("Xã Đăk Ngo", "Xã Đắk Ngo")
+]
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
+
+def normalize_address_component(text):
+    """
+    Normalize address component by trimming whitespace and removing leading zeros.
+    
+    Examples:
+        "Phường 02" -> "Phường 2"
+        "Quận 03" -> "Quận 3"
+        "  Phường 10  " -> "Phường 10"
+    
+    Args:
+        text: Address component string
+        
+    Returns:
+        Normalized string with trimmed spaces and no leading zeros
+    """
+    if not text:
+        return ''
+    
+    text = text.strip()
+    
+    for old, new in REPLACEMENT_REQUIRES:
+        if text.lower() == old.lower():
+            return new
+    
+    text = text.replace("Đăk", "Đắk")
+    text = text.replace("Dăk", "Đắk")
+        
+    parts = text.split()
+    if len(parts) >= 2:
+        last_part = parts[-1]
+        if last_part.isdigit():
+            normalized_number = str(int(last_part))
+            parts[-1] = normalized_number
+            return ' '.join(parts)
+    
+    return text
+
+
+def remove_so_nha_prefix(text):
+    """
+    Remove 'số nhà' or 'Số nhà' prefix from street address and format properly.
+    
+    Examples:
+        "số nhà 123 Đường ABC" -> "123, Đường ABC"
+        "Số nhà 45" -> "45"
+        "123 Đường XYZ" -> "123, Đường XYZ"
+    
+    Args:
+        text: Street address string
+        
+    Returns:
+        String with 'số nhà' prefix removed and properly formatted
+    """
+    if not text:
+        return ''
+    
+    text = text.strip()
+    
+    if text.lower().startswith('số nhà'):
+        remaining = text[len('số nhà'):].strip()
+        if remaining.startswith(':'):
+            remaining = remaining[1:].strip()
+        parts = remaining.split(None, 1)
+        if len(parts) == 2:
+            return f"{parts[0]}, {parts[1]}"
+        return remaining
+    
+    parts = text.split(None, 1)
+    if len(parts) == 2 and parts[0].replace('.', '').replace('/', '').isdigit():
+        return f"{parts[0]}, {parts[1]}"
+    
+    return text
+
+
+def geocode_address(address, goong_api_key):
+    """
+    Call Goong.io Geocoding API to convert address to coordinates.
+    
+    Args:
+        address: Full address string
+        goong_api_key: Goong.io API key
+        
+    Returns:
+        tuple: (success, latitude, longitude, error_message)
+    """
+    if not address or goong_api_key == "blank":
+        return False, None, None, "Geocoding disabled"
+    
+    try:
+        import urllib.parse
+        encoded_address = urllib.parse.quote(address)
+        geocode_url = f"https://rsapi.goong.io/geocode?address={encoded_address}&api_key={goong_api_key}"
+        
+        response = requests.get(geocode_url, timeout=10)
+        
+        if response.status_code != 200:
+            return False, None, None, f"HTTP {response.status_code}"
+        
+        data = response.json()
+        
+        if data.get('status') != 'OK':
+            return False, None, None, "No results found"
+        
+        results = data.get('results', [])
+        if not results:
+            return False, None, None, "Empty results"
+        
+        geometry = results[0].get('geometry', {})
+        location = geometry.get('location', {})
+        
+        lat = location.get('lat')
+        lng = location.get('lng')
+        
+        if lat is None or lng is None:
+            return False, None, None, "No coordinates in response"
+        
+        return True, lat, lng, None
+        
+    except Exception:
+        return False, None, None, "Exception"
+
+
+
+def openmap_geocode_address(address, openmap_api_key):
+    """
+    Call OpenMap.vn Forward Geocoding API to convert address to coordinates.
+    
+    Uses Google-compatible format endpoint for consistency with existing code.
+    
+    Args:
+        address: Full address string
+        openmap_api_key: OpenMap.vn API key
+        
+    Returns:
+        tuple: (success, latitude, longitude, error_message)
+    """
+    if not address or openmap_api_key == "blank":
+        return False, None, None, "OpenMap geocoding disabled"
+    
+    try:
+        import urllib.parse
+        encoded_address = urllib.parse.quote(address)
+        geocode_url = f"https://mapapis.openmap.vn/v1/geocode/forward?address={encoded_address}&apikey={openmap_api_key}"
+        
+        response = requests.get(geocode_url, timeout=10)
+        
+        if response.status_code != 200:
+            return False, None, None, f"HTTP {response.status_code}"
+        
+        data = response.json()
+        
+        if data.get('status') != 'OK':
+            return False, None, None, f"Status: {data.get('status')}"
+        
+        results = data.get('results', [])
+        if not results:
+            return False, None, None, "No results"
+        
+        geometry = results[0].get('geometry', {})
+        location = geometry.get('location', {})
+        
+        lat = location.get('lat')
+        lng = location.get('lng')
+        
+        if lat is None or lng is None:
+            return False, None, None, "No coordinates"
+        
+        return True, lat, lng, None
+        
+    except requests.exceptions.Timeout:
+        return False, None, None, "Timeout"
+    except requests.exceptions.RequestException as e:
+        return False, None, None, f"Request error: {str(e)}"
+    except Exception as e:
+        return False, None, None, f"Exception: {str(e)}"
+
+
+def convert_coordinates_to_address(coordinates_list, api_key, api_domain):
+    """
+    Call /api/convert-coordinate to get new addresses from coordinates (batch).
+    
+    Args:
+        coordinates_list: List of tuples [(longitude, latitude), ...]
+        api_key: Address converter API key
+        api_domain: API domain (test or prod)
+        
+    Returns:
+        list: List of tuples [(success, new_address, error_message), ...]
+    """
+    if not coordinates_list:
+        return []
+    
+    try:
+        coordinate_endpoint = f"{api_domain}/api/convert-coordinate"
+        
+        coord_objects = [{"longitude": lng, "latitude": lat} for lng, lat in coordinates_list]
+        
+        response = requests.post(
+            coordinate_endpoint,
+            json={
+                "coordinates": coord_objects,
+                "key": api_key
+            },
+            headers={"Content-Type": "application/json"},
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            error_msg = f"HTTP {response.status_code}"
+            return [(False, None, error_msg) for _ in coordinates_list]
+        
+        result_data = response.json()
+        
+        if not result_data.get("success", False):
+            error = result_data.get("error", "Unknown error")
+            return [(False, None, error) for _ in coordinates_list]
+        
+        data_list = result_data.get("data", [])
+        if not data_list:
+            return [(False, None, "Empty data") for _ in coordinates_list]
+        
+        results = []
+        for i, coord_result in enumerate(data_list):
+            if not coord_result.get("success", False):
+                error = coord_result.get("error", "Coordinate conversion failed")
+                results.append((False, None, error))
+                continue
+            
+            ward_info = coord_result.get("wardInfo", {})
+            ward_name = ward_info.get("newWardName", "")
+            province_name = ward_info.get("provinceName", "")
+            
+            if ward_name and province_name:
+                new_address = f"{ward_name}, {province_name}"
+                results.append((True, new_address, None))
+            else:
+                results.append((False, None, "Incomplete ward info"))
+        
+        while len(results) < len(coordinates_list):
+            results.append((False, None, "Missing result"))
+        
+        return results
+        
+    except Exception as e:
+        error_msg = f"Exception: {str(e)}"
+        return [(False, None, error_msg) for _ in coordinates_list]
+
+
+def try_geocoding_fallback(original_address, row_data, is_multi_column, api_key, api_domain, goong_api_key, openmap_api_key):
+    """
+    Try to convert failed address using geocoding fallback.
+    
+    Process:
+    1. For multi-column: prepare address from street, ward, district, province
+    2. Try Goong.io geocoding API first, if unavailable try OpenMap.vn API
+    3. Call coordinate conversion API to get new address
+    
+    Args:
+        original_address: Original address string that failed
+        row_data: Original row data dict (for multi-column)
+        is_multi_column: Boolean indicating multi-column format
+        api_key: Address converter API key
+        api_domain: API domain
+        goong_api_key: Goong.io API key
+        openmap_api_key: OpenMap.vn API key
+        
+    Returns:
+        dict: Result with success, converted, error fields
+    """
+    if goong_api_key == "blank" and openmap_api_key == "blank":
+        return {
+            "original": original_address,
+            "converted": "",
+            "error": "Geocoding disabled",
+            "success": False
+        }
+    
+    geocode_address_str = original_address
+    
+    if is_multi_column and row_data:
+        so_nha_duong = row_data.get('so_nha_duong', '').strip()
+        phuong_xa = row_data.get('phuong_xa', '').strip()
+        quan_huyen = row_data.get('quan_huyen', '').strip()
+        tinh_thanh = row_data.get('tinh_thanh', '').strip()
+        
+        so_nha_duong = remove_so_nha_prefix(so_nha_duong)
+        
+        addr_parts = [p for p in [so_nha_duong, phuong_xa, quan_huyen, tinh_thanh] if p]
+        geocode_address_str = ', '.join(addr_parts)
+    
+    geo_success = False
+    lat = None
+    lng = None
+    geo_error = None
+    
+    if goong_api_key != "blank":
+        geo_success, lat, lng, geo_error = geocode_address(geocode_address_str, goong_api_key)
+    
+    if not geo_success and openmap_api_key != "blank":
+        geo_success, lat, lng, geo_error = openmap_geocode_address(geocode_address_str, openmap_api_key)
+    
+    if not geo_success:
+        return {
+            "original": original_address,
+            "converted": "",
+            "error": "Geocoding failed",
+            "success": False
+        }
+    
+    coord_results = convert_coordinates_to_address([(lng, lat)], api_key, api_domain)
+    
+    if coord_results and len(coord_results) > 0:
+        coord_success, new_address, coord_error = coord_results[0]
+        
+        if coord_success:
+            return {
+                "original": original_address,
+                "converted": new_address,
+                "success": True,
+                "geocoded": True
+            }
+        else:
+            combined_error = f"Geocode OK but coordinate conversion failed: {coord_error}"
+            return {
+                "original": original_address,
+                "converted": "",
+                "error": combined_error,
+                "success": False
+            }
+    else:
+        return {
+            "original": original_address,
+            "converted": "",
+            "error": "Coordinate conversion returned no results",
+            "success": False
+        }
 
 
 class AddressConverterApp:
@@ -39,6 +389,8 @@ class AddressConverterApp:
         self.is_converting = False
         self.stop_requested = False
         self.api_key_visible = False
+        
+        self.last_openmap_request_time = 0
         
         self.account_info = {
             'name': '',
@@ -351,9 +703,9 @@ class AddressConverterApp:
                 original_data = data
                 for row in data:
                     addr_parts = [
-                        row.get('phuong_xa', ''),
-                        row.get('quan_huyen', ''),
-                        row.get('tinh_thanh', '')
+                        normalize_address_component(row.get('phuong_xa', '')),
+                        normalize_address_component(row.get('quan_huyen', '')),
+                        normalize_address_component(row.get('tinh_thanh', ''))
                     ]
                     address = ', '.join([p for p in addr_parts if p])
                     addresses.append(address)
@@ -533,6 +885,100 @@ class AddressConverterApp:
                         "error": "Chưa xử lý (đã dừng)" if self.stop_requested else "Chưa xử lý",
                         "success": False
                     }
+            
+            if not self.stop_requested and (GOONG_API_KEY != "blank" or OPENMAP_API_KEY != "blank"):
+                self.update_result_text(f"\n{'='*50}")
+                self.update_result_text("[TRY] Đang thử geocoding cho địa chỉ lỗi...")
+                self.root.after(0, lambda: self.update_progress(85, 100, "Geocoding fallback..."))
+                
+                failed_indices = [i for i in range(total_addresses) 
+                                if not results_dict[i].get("success", False) 
+                                and i not in skipped_indices]
+                
+                if failed_indices:
+                    self.update_result_text(f"Tìm thấy {len(failed_indices)} địa chỉ lỗi, đang thử geocoding...")
+                    
+                    geocode_tasks = []
+                    for idx in failed_indices:
+                        if self.stop_requested:
+                            break
+                        
+                        geocode_address_str = addresses[idx]
+                        row_data = None
+                        
+                        if is_multi_column and original_data:
+                            row_data = original_data[idx]
+                            so_nha_duong = row_data.get('so_nha_duong', '').strip()
+                            phuong_xa = row_data.get('phuong_xa', '').strip()
+                            quan_huyen = row_data.get('quan_huyen', '').strip()
+                            tinh_thanh = row_data.get('tinh_thanh', '').strip()
+                            
+                            so_nha_duong = remove_so_nha_prefix(so_nha_duong)
+                            
+                            addr_parts = [p for p in [so_nha_duong, phuong_xa, quan_huyen, tinh_thanh] if p]
+                            geocode_address_str = ', '.join(addr_parts)
+                        
+                        geocode_tasks.append((idx, geocode_address_str, addresses[idx]))
+                    
+                    coordinates_to_convert = []
+                    geocode_map = {}
+                    
+                    for idx, geocode_addr, original_addr in geocode_tasks:
+                        geo_success = False
+                        lat = None
+                        lng = None
+                        
+                        if GOONG_API_KEY != "blank":
+                            geo_success, lat, lng, geo_error = geocode_address(geocode_addr, GOONG_API_KEY)
+                        
+                        if not geo_success and OPENMAP_API_KEY != "blank":
+                            geo_success, lat, lng, geo_error = self.openmap_geocode_with_rate_limit(geocode_addr, OPENMAP_API_KEY)
+                        
+                        if geo_success:
+                            coord_idx = len(coordinates_to_convert)
+                            coordinates_to_convert.append((lng, lat))
+                            geocode_map[coord_idx] = (idx, original_addr)
+                    
+                    self.update_result_text(f"Geocoding thành công: {len(coordinates_to_convert)}/{len(geocode_tasks)} địa chỉ")
+                    
+                    geocoded_success = 0
+                    geocoded_failed = len(geocode_tasks) - len(coordinates_to_convert)
+                    
+                    if coordinates_to_convert:
+                        self.update_result_text(f"Đang chuyển đổi {len(coordinates_to_convert)} tọa độ...")
+                        
+                        coord_results = convert_coordinates_to_address(
+                            coordinates_to_convert,
+                            api_key,
+                            api_domain
+                        )
+                        
+                        for coord_idx, (success, new_address, error) in enumerate(coord_results):
+                            if coord_idx in geocode_map:
+                                idx, original_addr = geocode_map[coord_idx]
+                                
+                                if success:
+                                    results_dict[idx] = {
+                                        "original": original_addr,
+                                        "converted": new_address,
+                                        "success": True,
+                                        "geocoded": True
+                                    }
+                                    geocoded_success += 1
+                                    total_successful += 1
+                                    total_failed -= 1
+                                else:
+                                    results_dict[idx] = {
+                                        "original": original_addr,
+                                        "converted": "",
+                                        "error": f"Geocode OK but coordinate conversion failed: {error}",
+                                        "success": False
+                                    }
+                                    geocoded_failed += 1
+                    
+                    self.update_result_text(f"Kết quả geocoding: {geocoded_success} thành công, {geocoded_failed} thất bại")
+                else:
+                    self.update_result_text("Không có địa chỉ lỗi nào cần geocoding")
             
             all_results = [results_dict[i] for i in range(total_addresses)]
             
@@ -725,7 +1171,7 @@ class AddressConverterApp:
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 if is_multi_column and headers and original_data:
-                    new_headers = headers + ['Chuyển đổi']
+                    new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
                     f.write(','.join(new_headers) + '\n')
                     
                     for idx, result in enumerate(results):
@@ -742,11 +1188,17 @@ class AddressConverterApp:
                             
                             if result.get("success", False):
                                 converted = result.get("converted", "")
+                                parts = [p.strip() for p in converted.split(',')]
+                                ward = parts[0] if len(parts) > 0 else ""
+                                province = parts[1] if len(parts) > 1 else ""
                             else:
                                 error_msg = result.get("error", "Lỗi không xác định")
-                                converted = f"LỖI: {error_msg}"
+                                ward = f"LỖI: {error_msg}"
+                                province = ""
                             
-                            row_parts.append(converted)
+
+                            row_parts.append(ward)
+                            row_parts.append(province)
                             f.write(','.join(row_parts) + '\n')
                 else:
                     for result in results:
@@ -778,7 +1230,7 @@ class AddressConverterApp:
             header_alignment = Alignment(horizontal="center", vertical="center")
             
             if is_multi_column and headers and original_data:
-                new_headers = headers + ['Chuyển đổi']
+                new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
                 
                 for col_idx, header in enumerate(new_headers, start=1):
                     cell = ws.cell(row=1, column=col_idx, value=header)
@@ -801,13 +1253,22 @@ class AddressConverterApp:
                         for extra_idx, extra_val in enumerate(extra_cols):
                             ws.cell(row=idx, column=6+extra_idx, value=extra_val)
                         
-                        conversion_col = 6 + len(extra_cols)
+                        ward_col = 6 + len(extra_cols)
+                        province_col = ward_col + 1
+                        
                         if result.get("success", False):
-                            ws.cell(row=idx, column=conversion_col, value=result.get("converted", ""))
+                            converted = result.get("converted", "")
+                            parts = [p.strip() for p in converted.split(',')]
+                            ward = parts[0] if len(parts) > 0 else ""
+                            province = parts[1] if len(parts) > 1 else ""
+                            
+                            ws.cell(row=idx, column=ward_col, value=ward)
+                            ws.cell(row=idx, column=province_col, value=province)
                         else:
                             error_msg = result.get("error", "Lỗi không xác định")
-                            cell = ws.cell(row=idx, column=conversion_col, value=f"LỖI: {error_msg}")
+                            cell = ws.cell(row=idx, column=ward_col, value=f"LỖI: {error_msg}")
                             cell.font = Font(color="FF0000")
+                            ws.cell(row=idx, column=province_col, value="")
                 
                 for col_idx in range(1, len(new_headers) + 1):
                     ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 20
