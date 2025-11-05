@@ -1,0 +1,261 @@
+# -*- coding: utf-8 -*-
+"""
+File I/O handlers for reading and writing address data
+Supports both .txt and .xlsx formats
+"""
+from pathlib import Path
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+
+
+def read_txt_file(file_path):
+    """
+    Read txt file and detect format: single column or multi-column (5+ columns)
+    
+    Args:
+        file_path: Path to txt file
+        
+    Returns:
+        tuple: (data, is_multi_column, headers)
+            - data: List of addresses or list of dicts for multi-column
+            - is_multi_column: Boolean indicating format type
+            - headers: List of headers for multi-column, None for single column
+    """
+    data = []
+    is_multi_column = False
+    headers = None
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    
+    if not lines:
+        return [], False, None
+    
+    first_line_parts = [p.strip() for p in lines[0].split(',')]
+    
+    if len(first_line_parts) >= 5:
+        is_multi_column = True
+        headers = first_line_parts
+        
+        for line in lines[1:]:
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 5:
+                row_data = {
+                    'code': parts[0],
+                    'so_nha_duong': parts[1],
+                    'phuong_xa': parts[2],
+                    'quan_huyen': parts[3],
+                    'tinh_thanh': parts[4],
+                    'extra_columns': parts[5:] if len(parts) > 5 else []
+                }
+                data.append(row_data)
+    else:
+        for line in lines:
+            if line:
+                data.append(line)
+    
+    return data, is_multi_column, headers
+
+
+def read_excel_file(file_path):
+    """
+    Read Excel file and detect format: single column or multi-column (5+ columns)
+    
+    Args:
+        file_path: Path to Excel file
+        
+    Returns:
+        tuple: (data, is_multi_column, headers)
+            - data: List of addresses or list of dicts for multi-column
+            - is_multi_column: Boolean indicating format type
+            - headers: List of headers for multi-column, None for single column
+    """
+    data = []
+    is_multi_column = False
+    headers = None
+    
+    wb = load_workbook(file_path, read_only=True)
+    ws = wb.active
+    
+    if ws is None:
+        return [], False, None
+    
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    
+    if not rows:
+        return [], False, None
+    
+    first_row = rows[0]
+    num_cols = sum(1 for cell in first_row if cell is not None and str(cell).strip())
+    
+    if num_cols >= 5:
+        is_multi_column = True
+        headers = [str(cell).strip() if cell is not None else '' for cell in first_row]
+        
+        for row in rows[1:]:
+            if row and any(cell is not None for cell in row):
+                cells = [str(cell).strip() if cell is not None else '' for cell in row]
+                if len(cells) >= 5 and any(cells[:5]):
+                    row_data = {
+                        'code': cells[0] if len(cells) > 0 else '',
+                        'so_nha_duong': cells[1] if len(cells) > 1 else '',
+                        'phuong_xa': cells[2] if len(cells) > 2 else '',
+                        'quan_huyen': cells[3] if len(cells) > 3 else '',
+                        'tinh_thanh': cells[4] if len(cells) > 4 else '',
+                        'extra_columns': cells[5:] if len(cells) > 5 else []
+                    }
+                    data.append(row_data)
+    else:
+        for row in rows:
+            if row and row[0]:
+                addr = str(row[0]).strip()
+                if addr:
+                    data.append(addr)
+    
+    return data, is_multi_column, headers
+
+
+def write_txt_output(output_path, results, is_multi_column=False, headers=None, original_data=None):
+    """
+    Write output to txt file
+    
+    Args:
+        output_path: Path to output file
+        results: List of conversion results
+        is_multi_column: Boolean indicating if multi-column format
+        headers: List of header names (for multi-column)
+        original_data: List of original row dicts (for multi-column)
+    """
+    with open(output_path, 'w', encoding='utf-8') as f:
+        if is_multi_column and headers and original_data:
+            new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
+            f.write(','.join(new_headers) + '\n')
+            
+            for idx, result in enumerate(results):
+                if idx < len(original_data):
+                    row_data = original_data[idx]
+                    row_parts = [
+                        row_data.get('code', ''),
+                        row_data.get('so_nha_duong', ''),
+                        row_data.get('phuong_xa', ''),
+                        row_data.get('quan_huyen', ''),
+                        row_data.get('tinh_thanh', '')
+                    ]
+                    row_parts.extend(row_data.get('extra_columns', []))
+                    
+                    if result.get("success", False):
+                        converted = result.get("converted", "")
+                        parts = [p.strip() for p in converted.split(',')]
+                        ward = parts[0] if len(parts) > 0 else ""
+                        province = parts[1] if len(parts) > 1 else ""
+                    else:
+                        error_msg = result.get("error", "Lỗi không xác định")
+                        ward = f"LỖI: {error_msg} - {row_data.get('so_nha_duong_new', '')};{result.get('original', '')}"
+                        province = ""
+                    
+
+                    row_parts.append(ward)
+                    row_parts.append(province)
+                    f.write(','.join(row_parts) + '\n')
+        else:
+            for result in results:
+                original = result.get('original', '')
+                if result.get("success", False):
+                    f.write(result.get("converted", "") + "\n")
+                else:
+                    f.write(f"{original}\n")
+
+
+def write_excel_output(output_path, results, is_multi_column=False, headers=None, original_data=None):
+    """
+    Write output to Excel file
+    
+    Args:
+        output_path: Path to output file
+        results: List of conversion results
+        is_multi_column: Boolean indicating if multi-column format
+        headers: List of header names (for multi-column)
+        original_data: List of original row dicts (for multi-column)
+    """
+    wb = Workbook()
+    ws = wb.active
+    
+    if ws is None:
+        raise ValueError("Failed to create worksheet")
+    
+    ws.title = "Kết quả"
+    
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    
+    if is_multi_column and headers and original_data:
+        new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
+        
+        for col_idx, header in enumerate(new_headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+        
+        for idx, result in enumerate(results, start=2):
+            orig_idx = idx - 2
+            if orig_idx < len(original_data):
+                row_data = original_data[orig_idx]
+                
+                ws.cell(row=idx, column=1, value=row_data.get('code', ''))
+                ws.cell(row=idx, column=2, value=row_data.get('so_nha_duong', ''))
+                ws.cell(row=idx, column=3, value=row_data.get('phuong_xa', ''))
+                ws.cell(row=idx, column=4, value=row_data.get('quan_huyen', ''))
+                ws.cell(row=idx, column=5, value=row_data.get('tinh_thanh', ''))
+                
+                extra_cols = row_data.get('extra_columns', [])
+                for extra_idx, extra_val in enumerate(extra_cols):
+                    ws.cell(row=idx, column=6+extra_idx, value=extra_val)
+                
+                ward_col = 6 + len(extra_cols)
+                province_col = ward_col + 1
+                
+                if result.get("success", False):
+                    converted = result.get("converted", "")
+                    parts = [p.strip() for p in converted.split(',')]
+                    ward = parts[0] if len(parts) > 0 else ""
+                    province = parts[1] if len(parts) > 1 else ""
+                    
+                    ws.cell(row=idx, column=ward_col, value=ward)
+                    ws.cell(row=idx, column=province_col, value=province)
+                else:
+                    error_msg = result.get("error", "Lỗi không xác định")
+                    cell = ws.cell(row=idx, column=ward_col, value=f"LỖI: {error_msg} - {row_data.get('so_nha_duong_new', '')};{result.get('original', '')}")
+                    cell.font = Font(color="FF0000")
+                    ws.cell(row=idx, column=province_col, value="")
+        
+        from openpyxl.utils import get_column_letter
+        for col_idx in range(1, len(new_headers) + 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = 20
+    else:
+        ws['A1'] = "Gốc"
+        ws['B1'] = "Chuyển đổi"
+        
+        ws['A1'].font = header_font
+        ws['B1'].font = header_font
+        ws['A1'].fill = header_fill
+        ws['B1'].fill = header_fill
+        ws['A1'].alignment = header_alignment
+        ws['B1'].alignment = header_alignment
+        
+        ws.column_dimensions['A'].width = 50
+        ws.column_dimensions['B'].width = 60
+        
+        for idx, result in enumerate(results, start=2):
+            ws[f'A{idx}'] = result.get("original", "")
+            if result.get("success", False):
+                ws[f'B{idx}'] = result.get("converted", "")
+            else:
+                error_msg = result.get("error", "Lỗi không xác định")
+                ws[f'B{idx}'] = f"LỖI: {error_msg};{result.get('original', '')}"
+                ws[f'B{idx}'].font = Font(color="FF0000")
+    
+    wb.save(output_path)
+    wb.close()
