@@ -8,6 +8,7 @@
 - ✅ Giao diện tiếng Việt đơn giản, dễ sử dụng
 - ✅ Hỗ trợ file đầu vào: TXT và Excel (.xlsx)
 - ✅ **Xử lý tự động với file lớn**: Tự động chia nhỏ và gửi nhiều batch khi vượt quá 1000 địa chỉ
+- ✅ **Trích xuất mã hành chính**: Tự động trích xuất mã tỉnh/thành và mã phường/xã từ kết quả chuyển đổi
 - ✅ **Progress bar chi tiết**: Hiển thị tiến trình xử lý theo thời gian thực
 - ✅ Hiển thị kết quả chi tiết (thành công/thất bại)
 - ✅ Tự động tạo file kết quả trong thư mục output
@@ -191,18 +192,38 @@ Cột A chứa địa chỉ (có thể có header):
 
 ## Format file kết quả
 
-### TXT output
+### TXT output (Định dạng đơn giản)
 ```
 470 Đ. Trần Đại Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, Thành phố Đà Nẵng
 LỖI: Không tìm thấy địa chỉ tương ứng trong dữ liệu.
 ```
 
-### Excel output
+### TXT output (Định dạng nhiều cột)
+Với file đầu vào có nhiều cột, kết quả sẽ bao gồm thêm:
+- Số lần thử
+- Mã phường/xã mới (tự động trích xuất)
+- Phường/Xã mới
+- Mã tỉnh/thành mới (tự động trích xuất)
+- Tỉnh/Thành mới
+
+```
+code,so_nha_duong,phuong_xa,quan_huyen,tinh_thanh,Số lần thử,Mã phường/xã mới,Phường/Xã mới,Mã tỉnh/thành mới,Tỉnh/Thành mới
+001,123 Lê Lợi,Phường Bến Thành,Quận 1,TP HCM,1,268,Phường Bến Thành,12,Thành phố Hồ Chí Minh
+```
+
+### Excel output (Định dạng đơn giản)
 
 | Gốc | Chuyển đổi |
 |-----|------------|
 | 470 Đ. Trần Đại Nghĩa... | 470 Đ. Trần Đại Nghĩa, Phường Hòa Hải... |
 | Địa chỉ sai | LỖI: Không tìm thấy địa chỉ... |
+
+### Excel output (Định dạng nhiều cột)
+Với file Excel đầu vào có nhiều cột, kết quả sẽ bao gồm:
+
+| code | so_nha_duong | phuong_xa | quan_huyen | tinh_thanh | Số lần thử | Mã phường/xã mới | Phường/Xã mới | Mã tỉnh/thành mới | Tỉnh/Thành mới |
+|------|--------------|-----------|------------|------------|------------|------------------|---------------|-------------------|----------------|
+| 001 | 123 Lê Lợi | Phường Bến Thành | Quận 1 | TP HCM | 1 | 268 | Phường Bến Thành | 12 | Thành phố Hồ Chí Minh |
 
 ## Giới hạn
 

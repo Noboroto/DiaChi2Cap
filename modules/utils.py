@@ -11,8 +11,8 @@ import urllib.parse
 TEST_API_KEY = "testing-chuyen-doi-2-cap"
 API_DOMAIN_PROD = "https://address-converter.io.vn"
 API_DOMAIN_TEST = "http://localhost:5000"
-GOONG_API_KEY = "blank" # "VUoAmeVhEf7qbje0PlPS9IatkTuqJfJtTx8FjSmY"
-OPENMAP_API_KEY =  "A5PFHXxiTe780Z2GZRQjPMjQ5EQaVCsm"
+GOONG_API_KEY = "blank" 
+OPENMAP_API_KEY =  "blank"
 
 MAX_ADDRESS_BATCH_SIZE = 1000
 BATCH_DELAY_SECONDS = 2

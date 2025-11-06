@@ -90,7 +90,6 @@ so_nha_duong|phuong_xa|quan_huyen|tinh_thanh
 
 ## HIỂU KẾT QUẢ CHUYỂN ĐỔI
 
-
 ### Trường hợp thành công
 
 Ứng dụng hiển thị:
@@ -100,6 +99,27 @@ Phường Bến Nghé, Quận 1, TP HCM
 ```
 
 **Ý nghĩa**: Địa chỉ đã được cập nhật theo quy định mới
+
+### File kết quả với nhiều cột
+
+Nếu file đầu vào có nhiều cột, kết quả sẽ bao gồm:
+- Tất cả các cột gốc
+- **Số lần thử**: Số lần ứng dụng thử gửi yêu cầu (thường là 1)
+- **Mã phường/xã mới**: Mã số hành chính của phường/xã (tự động trích xuất)
+- **Phường/Xã mới**: Tên phường/xã sau khi chuyển đổi
+- **Mã tỉnh/thành mới**: Mã số hành chính của tỉnh/thành (tự động trích xuất)
+- **Tỉnh/Thành mới**: Tên tỉnh/thành sau khi chuyển đổi
+
+**Ví dụ**:
+```
+| Mã | Số nhà/Đường | Phường/Xã cũ | ... | Mã phường mới | Phường mới | Mã tỉnh mới | Tỉnh mới |
+| 001 | 123 Lê Lợi | Bến Thành | ... | 268 | Phường Bến Thành | 12 | TP Hồ Chí Minh |
+```
+
+**Lợi ích của mã hành chính**:
+- Dễ dàng tra cứu và đối chiếu với cơ sở dữ liệu quốc gia
+- Tích hợp với các hệ thống khác
+- Chuẩn hóa dữ liệu địa chỉ
 
 ### Trường hợp lỗi
 

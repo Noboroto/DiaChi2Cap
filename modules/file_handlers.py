@@ -6,6 +6,7 @@ Supports both .txt and .xlsx formats
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
+from modules.code_lookup import extract_codes_from_address
 
 
 def read_txt_file(file_path):
@@ -149,13 +150,16 @@ def write_txt_output(output_path, results, is_multi_column=False, headers=None, 
                     
                     if result.get("success", False):
                         converted = result.get("converted", "")
+                        
+                        province_code, ward_code = extract_codes_from_address(converted)
+                        
                         parts = [p.strip() for p in converted.split(',')]
                         ward = parts[0] if len(parts) > 0 else ""
-                        province = parts[1] if len(parts) > 1 else ""
+                        province = parts[-1] if len(parts) > 0 else ""
                         
-                        row_parts.append('')
+                        row_parts.append(ward_code or '')
                         row_parts.append(ward)
-                        row_parts.append('')
+                        row_parts.append(province_code or '')
                         row_parts.append(province)
                     else:
                         error_msg = result.get("error", "Lỗi không xác định")
@@ -233,9 +237,13 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
                 
                 if result.get("success", False):
                     converted = result.get("converted", "")
+                    
+                    province_code, ward_code = extract_codes_from_address(converted)
+                    
                     parts = [p.strip() for p in converted.split(',')]
-                    ward = parts[len(parts)-2] if len(parts) > 1 else ""
-                    province = parts[len(parts) -1] if len(parts) > 1 else ""
+                    ward = parts[0] if len(parts) > 0 else ""
+                    province = parts[-1] if len(parts) > 0 else ""
+                    
                     if "[LỖI]" in ward:
                         ward = ward.replace("[LỖI]", "LỖI:").strip()
                         cell = ws.cell(row=idx, column=ward_code_col, value=ward)
@@ -245,9 +253,9 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
                         ws.cell(row=idx, column=province_col, value='')
                         continue
 
-                    ws.cell(row=idx, column=ward_code_col, value='')
+                    ws.cell(row=idx, column=ward_code_col, value=ward_code or '')
                     ws.cell(row=idx, column=ward_col, value=ward)
-                    ws.cell(row=idx, column=province_code_col, value='')
+                    ws.cell(row=idx, column=province_code_col, value=province_code or '')
                     ws.cell(row=idx, column=province_col, value=province)
                 else:
                     error_msg = result.get("error", "Lỗi không xác định")

@@ -44,7 +44,7 @@ class AddressConverterApp:
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
         
-        self.api_key_var = ctk.StringVar(value="vn_addr_1b713b0e78161fc9a76b00b0a360469a079a3436f1c7020747fa08aa867aebe1")
+        self.api_key_var = ctk.StringVar()
         self.input_file_path = ctk.StringVar()
         self.output_folder = ""
         self.is_converting = False
@@ -250,7 +250,7 @@ class AddressConverterApp:
         self.result_textbox = ctk.CTkTextbox(
             main_frame,
             width=700,
-            height=170,
+            height=165,
             font=ctk.CTkFont(family="Consolas", size=11),
             wrap="word"
         )

@@ -1,52 +1,40 @@
-# HƯỚNG DẪN KỸ THUẬT - Ứng dụng Chuyển đổi địa chỉ 2 cấp# HƯỚNG DẪN SỬ DỤNG - Ứng dụng Chuyển đổi địa chỉ 2 cấp
+# HƯỚNG DẪN KỸ THUẬT - Ứng dụng Chuyển đổi địa chỉ 2 cấp
 
+## Dành cho Developers
 
+---
 
-## Dành cho Developers## Giới thiệu giao diện
+## 1. TỔNG QUAN KIẾN TRÚC
 
-
-
----Ứng dụng sử dụng **CustomTkinter** - framework UI hiện đại với:
-
-- Light theme sáng sủa, dễ nhìn
-
-## 1. TỔNG QUAN KIẾN TRÚC- Rounded corners và smooth animations
-
-- Professional color scheme (Blue theme)
-
-### 1.1 Tech Stack- Responsive layout với window size 800x650
-
+### 1.1 Tech Stack
 - **Python**: 3.11+
-
-- **GUI Framework**: CustomTkinter 5.2.2## Cài đặt môi trường phát triển
-
+- **GUI Framework**: CustomTkinter 5.2.2
 - **HTTP Client**: requests
+- **Excel Processing**: openpyxl
+- **Geocoding APIs**: Goong.io, OpenMap.vn
+- **Administrative Data**: province.json, ward.json
 
-- **Excel Processing**: openpyxl### Bước 1: Tạo môi trường conda
+### 1.2 Cấu trúc thư mục
 
-- **Geocoding APIs**: Goong.io, OpenMap.vn```powershell
-
-cd d:\Github\Code-Python\DiaChi2Cap
-
-### 1.2 Cấu trúc thư mụcconda create -n dia-chi-2-cap python=3.11 -y
-
-conda activate dia-chi-2-cap
-
-``````
-
+```
 DiaChi2Cap/
-
-├── app.py                          # GUI application (main entry point)### Bước 2: Cài đặt dependencies
-
-├── modules/```powershell
-
-│   ├── __init__.pypip install -r requirements.txt
-
-│   ├── api_client.py               # API communication layer```
-
+├── app.py                          # GUI application (main entry point)
+├── modules/
+│   ├── __init__.py
+│   ├── api_client.py               # API communication layer
 │   ├── conversion_processor.py    # Business logic & multi-stage processing
-
-│   ├── file_handlers.py            # File I/O operationsCác thư viện chính:
+│   ├── file_handlers.py            # File I/O operations
+│   ├── code_lookup.py              # Province & ward code extraction (NEW)
+│   └── utils.py                    # Constants & utilities
+├── data/                           # Administrative data (NEW)
+│   ├── province.json               # Province codes and names
+│   └── ward.json                   # Ward codes and names
+├── output/                         # Generated output files
+├── requirements.txt                # Python dependencies
+├── test_syntax.py                  # Syntax validation
+├── test_validation.py              # Integration tests
+└── HUONG_DAN.md                   # This file
+```
 
 │   └── utils.py                    # Constants & utilities- **customtkinter 5.2.2**: Modern UI components
 
@@ -670,11 +658,95 @@ REGULAR_BATCH_SIZE = 50
 
 ---
 
-## 9. CONTACTS
+## 9. TÍNH NĂNG MỚI: TRÍCH XUẤT MÃ HÀNH CHÍNH
+
+### 9.1 Tổng quan
+
+Sau khi chuyển đổi địa chỉ thành công, ứng dụng tự động trích xuất mã hành chính từ kết quả:
+- **Mã tỉnh/thành phố**: Tra cứu từ `data/province.json`
+- **Mã phường/xã**: Tra cứu từ `data/ward.json`
+
+### 9.2 Module code_lookup.py
+
+```python
+from modules.code_lookup import extract_codes_from_address
+
+# Sử dụng
+province_code, ward_code = extract_codes_from_address(
+    "Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh"
+)
+# province_code = "12", ward_code = "268"
+```
+
+**Các hàm chính**:
+- `load_json_data()`: Load province.json và ward.json
+- `find_province_code(province_name)`: Tìm mã tỉnh từ tên
+- `find_ward_code(ward_name, province_code)`: Tìm mã phường từ tên và mã tỉnh
+- `extract_codes_from_address(address)`: Trích xuất cả 2 mã từ địa chỉ đầy đủ
+
+### 9.3 Tích hợp với file_handlers.py
+
+File handlers tự động gọi `extract_codes_from_address()` cho mỗi kết quả thành công:
+
+```python
+from modules.code_lookup import extract_codes_from_address
+
+def write_excel_output(...):
+    for result in results:
+        if result.get("success", False):
+            converted = result.get("converted", "")
+            province_code, ward_code = extract_codes_from_address(converted)
+            # Ghi vào Excel
+```
+
+### 9.4 Bundle data vào exe
+
+File `app.spec` đã được cấu hình để bundle thư mục `data/`:
+
+```python
+a = Analysis(
+    ['app.py'],
+    datas=[('data', 'data')],  # Bundle data folder
+    ...
+)
+```
+
+Module `code_lookup.py` tự động detect PyInstaller và load từ đúng vị trí:
+
+```python
+def get_data_dir():
+    if getattr(sys, 'frozen', False):
+        # Running as exe
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running as script
+        base_path = Path(__file__).parent.parent
+    return base_path / "data"
+```
+
+### 9.5 Hiệu năng
+
+- **Lazy loading**: JSON chỉ load 1 lần khi cần
+- **Cache**: Dữ liệu được cache trong biến global
+- **Fast lookup**: Dictionary lookup $O(1)$
+- **Thread-safe**: Sử dụng trong multi-threading
+
+### 9.6 Testing
+
+```powershell
+# Test code lookup
+python -c "from modules.code_lookup import extract_codes_from_address; print(extract_codes_from_address('Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh'))"
+```
+
+Expected output: `('12', '268')`
+
+---
+
+## 10. CONTACTS
 
 - **Email**: ngophong4869@gmail.com
 
 ---
 
-**Phiên bản**: 2.0  
+**Phiên bản**: 2.1  
 **Ngày cập nhật**: 7/11/2024
