@@ -154,7 +154,7 @@ def write_txt_output(output_path, results, is_multi_column=False, headers=None, 
                         province_code, ward_code = extract_codes_from_address(converted)
                         
                         parts = [p.strip() for p in converted.split(',')]
-                        ward = parts[0] if len(parts) > 0 else ""
+                        ward = parts[-2] if len(parts) > 0 else ""
                         province = parts[-1] if len(parts) > 0 else ""
                         
                         row_parts.append(ward_code or '')
@@ -241,7 +241,7 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
                     province_code, ward_code = extract_codes_from_address(converted)
                     
                     parts = [p.strip() for p in converted.split(',')]
-                    ward = parts[0] if len(parts) > 0 else ""
+                    ward = parts[-2] if len(parts) > 0 else ""
                     province = parts[-1] if len(parts) > 0 else ""
                     
                     if "[LỖI]" in ward:

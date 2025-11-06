@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 Code lookup module for extracting province and ward codes
-Loads province.json and ward.json to match administrative codes
+Loads Vietnamese-Administrative-Units-Dataset.json to match administrative codes
 """
 import json
 import re
 import sys
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
-PROVINCE_DATA: Optional[Dict[str, Any]] = None
-WARD_DATA: Optional[Dict[str, Any]] = None
+PROVINCE_DATA: Optional[List[Dict[str, Any]]] = None
+WARD_DATA: Optional[List[Dict[str, Any]]] = None
 
 
 def get_data_dir():
@@ -25,17 +25,16 @@ def get_data_dir():
 
 
 def load_json_data():
-    """Load province and ward JSON data"""
+    """Load province and ward JSON data from consolidated dataset"""
     global PROVINCE_DATA, WARD_DATA
     
     if PROVINCE_DATA is None or WARD_DATA is None:
         data_dir = get_data_dir()
         
-        with open(data_dir / "province.json", 'r', encoding='utf-8') as f:
-            PROVINCE_DATA = json.load(f)
-        
-        with open(data_dir / "ward.json", 'r', encoding='utf-8') as f:
-            WARD_DATA = json.load(f)
+        with open(data_dir / "Vietnamese-Administrative-Units-Dataset.json", 'r', encoding='utf-8') as f:
+            dataset = json.load(f)
+            PROVINCE_DATA = dataset.get('provinces', [])
+            WARD_DATA = dataset.get('wards', [])
 
 
 def normalize_text(text: str) -> str:
@@ -113,9 +112,7 @@ def extract_ward_name(address: str) -> Optional[str]:
     if not parts:
         return None
     
-    first_part = parts[0].strip()
-    
-    prefixes = [
+    ward_prefixes = [
         'Phường ',
         'Xã ',
         'Thị trấn ',
@@ -124,16 +121,17 @@ def extract_ward_name(address: str) -> Optional[str]:
         'TT. ',
     ]
     
-    for prefix in prefixes:
-        if first_part.startswith(prefix):
-            return first_part[len(prefix):].strip()
+    for part in parts:
+        for prefix in ward_prefixes:
+            if part.startswith(prefix):
+                return part[len(prefix):].strip()
     
-    return first_part
+    return None
 
 
 def find_province_code(province_name: str) -> Optional[str]:
     """
-    Find province code from province name
+    Find province code from province name using Vietnamese-Administrative-Units-Dataset.json
     """
     if not province_name:
         return None
@@ -145,14 +143,11 @@ def find_province_code(province_name: str) -> Optional[str]:
     
     normalized_search = normalize_text(province_name)
     
-    for code, data in PROVINCE_DATA.items():
-        name = data.get('name', '')
-        name_with_type = data.get('name_with_type', '')
+    for province in PROVINCE_DATA:
+        name = province.get('name', '')
+        code = province.get('code', '')
         
         if normalized_search == normalize_text(name):
-            return code
-        
-        if normalized_search == normalize_text(name_with_type):
             return code
         
         name_normalized = normalize_text(name)
@@ -164,30 +159,35 @@ def find_province_code(province_name: str) -> Optional[str]:
 
 def find_ward_code(ward_name: str, province_code: str) -> Optional[str]:
     """
-    Find ward code from ward name and province code
+    Find ward code from ward name and province code using Vietnamese-Administrative-Units-Dataset.json
     """
     if not ward_name or not province_code:
         return None
     
     load_json_data()
     
-    if WARD_DATA is None:
+    if WARD_DATA is None or PROVINCE_DATA is None:
         return None
     
     normalized_search = normalize_text(ward_name)
     
-    for code, data in WARD_DATA.items():
-        parent_code = data.get('parent_code', '')
-        if parent_code != province_code:
+    province_id = None
+    for province in PROVINCE_DATA:
+        if province.get('code') == province_code:
+            province_id = province.get('id')
+            break
+    
+    if province_id is None:
+        return None
+    
+    for ward in WARD_DATA:
+        if ward.get('province_id') != province_id:
             continue
         
-        name = data.get('name', '')
-        name_with_type = data.get('name_with_type', '')
+        name = ward.get('name', '')
+        code = ward.get('code', '')
         
         if normalized_search == normalize_text(name):
-            return code
-        
-        if normalized_search == normalize_text(name_with_type):
             return code
         
         name_normalized = normalize_text(name)

@@ -18,10 +18,10 @@ def test_province_lookup():
     print("\n[TEST] Province code lookup:")
     
     test_cases = [
-        ("Hồ Chí Minh", "12"),
-        ("Thành phố Hồ Chí Minh", "12"),
-        ("Hà Nội", "11"),
-        ("Đà Nẵng", "13"),
+        ("Hồ Chí Minh", "79"),
+        ("Thành phố Hồ Chí Minh", "79"),
+        ("Hà Nội", "01"),
+        ("Đà Nẵng", "48"),
     ]
     
     for province_name, expected_code in test_cases:
@@ -34,8 +34,8 @@ def test_ward_lookup():
     print("\n[TEST] Ward code lookup:")
     
     test_cases = [
-        ("Bến Thành", "12", "7948"),
-        ("Bến Cát", "12", "14348"),
+        ("Bến Thành", "79", "26743"),
+        ("Bến Cát", "79", "25813"),
     ]
     
     for ward_name, province_code, expected_code in test_cases:
@@ -50,15 +50,15 @@ def test_full_address_extraction():
     test_cases = [
         (
             "Phường Bến Thành, Quận 1, Thành phố Hồ Chí Minh",
-            ("12", "7948")
+            ("79", "26743")
         ),
         (
             "Phường Bến Cát, Thành phố Hồ Chí Minh",
-            ("12", "14348")
+            ("79", "25813")
         ),
         (
             "Phường Hòa Hải, Quận Ngũ Hành Sơn, Thành phố Đà Nẵng",
-            ("13", None)
+            ("48", None)
         ),
     ]
     

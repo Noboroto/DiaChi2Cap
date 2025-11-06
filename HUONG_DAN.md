@@ -12,7 +12,7 @@
 - **HTTP Client**: requests
 - **Excel Processing**: openpyxl
 - **Geocoding APIs**: Goong.io, OpenMap.vn
-- **Administrative Data**: province.json, ward.json
+- **Administrative Data**: Vietnamese-Administrative-Units-Dataset.json (Official government dataset)
 
 ### 1.2 Cấu trúc thư mục
 
@@ -26,9 +26,8 @@ DiaChi2Cap/
 │   ├── file_handlers.py            # File I/O operations
 │   ├── code_lookup.py              # Province & ward code extraction (NEW)
 │   └── utils.py                    # Constants & utilities
-├── data/                           # Administrative data (NEW)
-│   ├── province.json               # Province codes and names
-│   └── ward.json                   # Ward codes and names
+├── data/                           # Administrative data
+│   └── Vietnamese-Administrative-Units-Dataset.json  # Complete province & ward data
 ├── output/                         # Generated output files
 ├── requirements.txt                # Python dependencies
 ├── test_syntax.py                  # Syntax validation
@@ -663,8 +662,11 @@ REGULAR_BATCH_SIZE = 50
 ### 9.1 Tổng quan
 
 Sau khi chuyển đổi địa chỉ thành công, ứng dụng tự động trích xuất mã hành chính từ kết quả:
-- **Mã tỉnh/thành phố**: Tra cứu từ `data/province.json`
-- **Mã phường/xã**: Tra cứu từ `data/ward.json`
+- **Mã tỉnh/thành phố**: Tra cứu từ `data/Vietnamese-Administrative-Units-Dataset.json` (provinces)
+- **Mã phường/xã**: Tra cứu từ `data/Vietnamese-Administrative-Units-Dataset.json` (wards)
+
+**Lưu ý**: Mã hành chính sử dụng chuẩn chính thức từ Bộ Nội vụ:
+- Hà Nội: `01`, Hồ Chí Minh: `79`, Đà Nẵng: `48`, v.v.
 
 ### 9.2 Module code_lookup.py
 
@@ -675,13 +677,13 @@ from modules.code_lookup import extract_codes_from_address
 province_code, ward_code = extract_codes_from_address(
     "Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh"
 )
-# province_code = "12", ward_code = "268"
+# province_code = "79", ward_code = "26740"
 ```
 
 **Các hàm chính**:
-- `load_json_data()`: Load province.json và ward.json
-- `find_province_code(province_name)`: Tìm mã tỉnh từ tên
-- `find_ward_code(ward_name, province_code)`: Tìm mã phường từ tên và mã tỉnh
+- `load_json_data()`: Load Vietnamese-Administrative-Units-Dataset.json
+- `find_province_code(province_name)`: Tìm mã tỉnh từ tên (sử dụng provinces.code)
+- `find_ward_code(ward_name, province_code)`: Tìm mã phường từ tên và mã tỉnh (sử dụng wards.code với wards.province_id)
 - `extract_codes_from_address(address)`: Trích xuất cả 2 mã từ địa chỉ đầy đủ
 
 ### 9.3 Tích hợp với file_handlers.py
