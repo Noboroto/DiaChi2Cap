@@ -129,7 +129,7 @@ def write_txt_output(output_path, results, is_multi_column=False, headers=None, 
     """
     with open(output_path, 'w', encoding='utf-8') as f:
         if is_multi_column and headers and original_data:
-            new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
+            new_headers = headers + ['Số lần thử', 'Mã phường/xã mới', 'Phường/Xã mới', 'Mã tỉnh/thành mới', 'Tỉnh/Thành mới']
             f.write(','.join(new_headers) + '\n')
             
             for idx, result in enumerate(results):
@@ -144,19 +144,27 @@ def write_txt_output(output_path, results, is_multi_column=False, headers=None, 
                     ]
                     row_parts.extend(row_data.get('extra_columns', []))
                     
+                    retry_count = result.get('retryCount', 1)
+                    row_parts.append(str(retry_count))
+                    
                     if result.get("success", False):
                         converted = result.get("converted", "")
                         parts = [p.strip() for p in converted.split(',')]
                         ward = parts[0] if len(parts) > 0 else ""
                         province = parts[1] if len(parts) > 1 else ""
+                        
+                        row_parts.append('')
+                        row_parts.append(ward)
+                        row_parts.append('')
+                        row_parts.append(province)
                     else:
                         error_msg = result.get("error", "Lỗi không xác định")
-                        ward = f"LỖI: {error_msg} - {row_data.get('so_nha_duong_new', '')};{result.get('original', '')}"
-                        province = ""
+                        error_text = f"LỖI: {error_msg} - {result.get('original', '')}"
+                        row_parts.append('')
+                        row_parts.append(error_text)
+                        row_parts.append('')
+                        row_parts.append('')
                     
-
-                    row_parts.append(ward)
-                    row_parts.append(province)
                     f.write(','.join(row_parts) + '\n')
         else:
             for result in results:
@@ -182,7 +190,7 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
     ws = wb.active
     
     if ws is None:
-        raise ValueError("Failed to create worksheet")
+        raise ValueError("Không thể tạo worksheet")
     
     ws.title = "Kết quả"
     
@@ -191,7 +199,7 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
     header_alignment = Alignment(horizontal="center", vertical="center")
     
     if is_multi_column and headers and original_data:
-        new_headers = headers + ['Phường/ Xã mới', 'Tỉnh/ Thành mới']
+        new_headers = headers + ['Số lần thử', 'Mã phường/xã mới', 'Phường/Xã mới', 'Mã tỉnh/thành mới', 'Tỉnh/Thành mới']
         
         for col_idx, header in enumerate(new_headers, start=1):
             cell = ws.cell(row=1, column=col_idx, value=header)
@@ -214,23 +222,43 @@ def write_excel_output(output_path, results, is_multi_column=False, headers=None
                 for extra_idx, extra_val in enumerate(extra_cols):
                     ws.cell(row=idx, column=6+extra_idx, value=extra_val)
                 
-                ward_col = 6 + len(extra_cols)
-                province_col = ward_col + 1
+                retry_col = 6 + len(extra_cols)
+                ward_code_col = retry_col + 1
+                ward_col = ward_code_col + 1
+                province_code_col = ward_col + 1
+                province_col = province_code_col + 1
+                
+                retry_count = result.get('retryCount', 1)
+                ws.cell(row=idx, column=retry_col, value=retry_count)
                 
                 if result.get("success", False):
                     converted = result.get("converted", "")
                     parts = [p.strip() for p in converted.split(',')]
-                    ward = parts[0] if len(parts) > 0 else ""
-                    province = parts[1] if len(parts) > 1 else ""
-                    
+                    ward = parts[len(parts)-2] if len(parts) > 1 else ""
+                    province = parts[len(parts) -1] if len(parts) > 1 else ""
+                    if "[LỖI]" in ward:
+                        ward = ward.replace("[LỖI]", "LỖI:").strip()
+                        cell = ws.cell(row=idx, column=ward_code_col, value=ward)
+                        cell.font = Font(color="FF0000")
+                        ws.cell(row=idx, column=ward_col, value='')
+                        ws.cell(row=idx, column=province_code_col, value='')
+                        ws.cell(row=idx, column=province_col, value='')
+                        continue
+
+                    ws.cell(row=idx, column=ward_code_col, value='')
                     ws.cell(row=idx, column=ward_col, value=ward)
+                    ws.cell(row=idx, column=province_code_col, value='')
                     ws.cell(row=idx, column=province_col, value=province)
                 else:
                     error_msg = result.get("error", "Lỗi không xác định")
-                    cell = ws.cell(row=idx, column=ward_col, value=f"LỖI: {error_msg} - {row_data.get('so_nha_duong_new', '')};{result.get('original', '')}")
-                    cell.font = Font(color="FF0000")
-                    ws.cell(row=idx, column=province_col, value="")
-        
+                    cell_code = ws.cell(row=idx, column=ward_code_col, value=f"LỖI: {error_msg}")
+                    cell_code.font = Font(color="FF0000")
+                    ws.cell(row=idx, column=ward_col, value='')
+                    cell_value = ws.cell(row=idx, column=province_code_col, value=f"{result.get('original', '-')}")
+                    cell_value.font = Font(color="FF0000")
+                    ws.cell(row=idx, column=province_col, value='')
+                    
+
         from openpyxl.utils import get_column_letter
         for col_idx in range(1, len(new_headers) + 1):
             ws.column_dimensions[get_column_letter(col_idx)].width = 20

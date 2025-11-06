@@ -11,13 +11,13 @@ import threading
 import time
 from pathlib import Path
 
-from utils import (
+from modules.utils import (
     TEST_API_KEY,
     API_DOMAIN_PROD,
     API_DOMAIN_TEST,
     GOONG_API_KEY,
     OPENMAP_API_KEY,
-    MAX_BATCH_SIZE,
+    MAX_ADDRESS_BATCH_SIZE,
     BATCH_DELAY_SECONDS,
     OPENMAP_RATE_LIMIT_DELAY
 )
@@ -44,7 +44,7 @@ class AddressConverterApp:
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
         
-        self.api_key_var = ctk.StringVar()
+        self.api_key_var = ctk.StringVar(value="vn_addr_1b713b0e78161fc9a76b00b0a360469a079a3436f1c7020747fa08aa867aebe1")
         self.input_file_path = ctk.StringVar()
         self.output_folder = ""
         self.is_converting = False
@@ -250,7 +250,7 @@ class AddressConverterApp:
         self.result_textbox = ctk.CTkTextbox(
             main_frame,
             width=700,
-            height=165,
+            height=170,
             font=ctk.CTkFont(family="Consolas", size=11),
             wrap="word"
         )
@@ -341,6 +341,8 @@ class AddressConverterApp:
 
     def perform_conversion(self, api_key, input_file, file_ext):
         try:
+            conversion_start_time = time.time()
+            
             self.update_result_text("Đang đọc file đầu vào...", clear=True)
             self.root.after(0, lambda: self.update_progress(10, 100, "Đọc file đầu vào..."))
             
@@ -354,127 +356,113 @@ class AddressConverterApp:
                 return
             
             api_domain = API_DOMAIN_TEST if api_key == TEST_API_KEY else API_DOMAIN_PROD
-            api_client = AddressAPIClient(api_key, api_domain, MAX_BATCH_SIZE, BATCH_DELAY_SECONDS)
+            api_client = AddressAPIClient(api_key, api_domain, MAX_ADDRESS_BATCH_SIZE, BATCH_DELAY_SECONDS)
             
             self.processor = ConversionProcessor(
                 api_client,
                 GOONG_API_KEY,
                 OPENMAP_API_KEY,
-                OPENMAP_RATE_LIMIT_DELAY
+                OPENMAP_RATE_LIMIT_DELAY,
+                progress_callback=lambda msg: self.root.after(0, lambda m=msg: self.update_result_text(m))
             )
             self.processor.reset_stop_flag()
             
-            addresses, original_data, pre_converted_indices = self.processor.prepare_addresses(data, is_multi_column)
+            self.update_result_text(f"\n{'='*50}")
+            self.update_result_text("[BƯỚC 1] CHUẨN BỊ DỮ LIỆU")
+            self.update_result_text(f"{'='*50}")
             
-            total_addresses = len(addresses)
+            addresses_with_street, addresses_no_street, original_data, pre_converted_indices = self.processor.prepare_addresses(data, is_multi_column)
+            
+            total_addresses = len(addresses_with_street)
             
             if is_multi_column:
                 num_headers = len(headers) if headers else 0
                 self.update_result_text(f"[ĐỊA CHỈ NHIỀU CỘT] Đã phát hiện định dạng {num_headers} cột")
-                self.update_result_text(f"Sử dụng pattern: Phường Xã, Quận Huyện, Tỉnh Thành")
             else:
                 self.update_result_text(f"[ĐỊA CHỈ ĐƠN] Đã phát hiện định dạng 1 cột")
             
             if pre_converted_indices:
-                self.update_result_text(f"[PRE-CONVERT] Đã áp dụng pre-conversion cho {len(pre_converted_indices)} địa chỉ")
+                self.update_result_text(f"[PRE] Đã áp dụng chuyển đổi có sẵn cho {len(pre_converted_indices)} địa chỉ")
             
             self.update_result_text(f"Đã đọc {total_addresses} địa chỉ từ file")
             self.root.after(0, lambda: self.update_progress(20, 100, "Chuẩn bị xử lý..."))
             
-            num_batches = (total_addresses + MAX_BATCH_SIZE - 1) // MAX_BATCH_SIZE
-            
-            if num_batches > 1:
-                self.update_result_text(f"\n[CẢNH BÁO] File có {total_addresses} địa chỉ, vượt quá giới hạn {MAX_BATCH_SIZE} địa chỉ/lần")
-                self.update_result_text(f"Hệ thống sẽ tự động chia thành {num_batches} lần gửi")
-                self.update_result_text(f"Thời gian chờ giữa các lần: {BATCH_DELAY_SECONDS} giây\n")
-
             results_dict = {}
-            total_successful = 0
-            total_failed = 0
             skipped_indices = set()
+            
+            for idx in range(total_addresses):
+                results_dict[idx] = {
+                    "original": addresses_with_street[idx],
+                    "converted": "",
+                    "success": False,
+                    "retryCount": 0
+                }
             
             for idx, converted_addr in pre_converted_indices.items():
                 results_dict[idx] = {
-                    "original": addresses[idx],
+                    "original": addresses_with_street[idx],
                     "converted": converted_addr,
                     "success": True,
-                    "preConverted": True
+                    "preConverted": True,
+                    "retryCount": 1
                 }
-                total_successful += 1
                 skipped_indices.add(idx)
             
-            for batch_num in range(num_batches):
-                if self.processor.stop_requested:
-                    self.update_result_text("\n[DỪNG] Đã dừng tại batch {}/{}".format(batch_num + 1, num_batches))
-                    break
+            cumulative_success = len(skipped_indices)
+            
+            if self.processor.stop_requested:
+                self.update_result_text("\n[DỪNG] Đã dừng sau bước 2.1")
+                failed_indices_set = set()
+            else:
+                self.update_result_text(f"\n{'='*50}")
+                self.update_result_text("[BƯỚC 2] XỬ LÝ ĐỊA CHỈ CHI TIẾT")
+                self.update_result_text(f"{'='*50}")
+                self.root.after(0, lambda: self.update_progress(30, 100, "Bước 2..."))
                 
-                start_idx = batch_num * MAX_BATCH_SIZE
-                end_idx = min((batch_num + 1) * MAX_BATCH_SIZE, total_addresses)
-                
-                batch_items = [(i, addresses[i]) for i in range(start_idx, end_idx) if i not in skipped_indices]
-                
-                if not batch_items:
-                    continue
-                
-                batch_info = f"Lần {batch_num + 1}/{num_batches}" if num_batches > 1 else ""
-                if batch_info:
-                    self.update_result_text(f"{batch_info}: Xử lý địa chỉ {start_idx + 1} đến {end_idx}")
-                
-                progress_start = 20 + (batch_num * 70 // num_batches)
-                self.root.after(0, lambda p=progress_start, b=batch_info: self.update_progress(
-                    p, 100, f"Đang gửi yêu cầu {b}..." if b else "Đang gửi yêu cầu..."
-                ))
-                
-                batch_results, successful, failed, skipped_indices = self.processor.process_batch(
-                    batch_items, skipped_indices
+                batch_results, successful, failed, failed_indices_set = self.processor.process_single_parallel(
+                    addresses_with_street, skipped_indices
                 )
                 
                 results_dict.update(batch_results)
-                total_successful += successful
-                total_failed += failed
-                
-                if len(skipped_indices) > len(pre_converted_indices):
-                    balance_skipped = len(skipped_indices) - len(pre_converted_indices)
-                    self.update_result_text(f"\n[SỐ DƯ KHÔNG ĐỦ] Bỏ qua {balance_skipped} địa chỉ")
-                
-                if batch_num < num_batches - 1:
-                    if self.processor.stop_requested:
-                        break
-                    self.update_result_text(f"Chờ {BATCH_DELAY_SECONDS} giây trước khi gửi lần tiếp theo...")
-                    for i in range(BATCH_DELAY_SECONDS):
-                        if self.processor.stop_requested:
-                            break
-                        time.sleep(1)
-                        remaining = BATCH_DELAY_SECONDS - i - 1
-                        if remaining > 0:
-                            self.root.after(0, lambda r=remaining: self.progress_label.configure(
-                                text=f"Chờ {r} giây..."
-                            ))
+                cumulative_success += successful
+                self.update_result_text(f"Bước này: {successful} thành công, {failed} thất bại")
+                self.update_result_text(f"Tổng lũy kế: {cumulative_success} thành công, {total_addresses - cumulative_success} còn lại")
             
-            for i in range(total_addresses):
-                if i not in results_dict:
-                    results_dict[i] = {
-                        "original": addresses[i],
-                        "converted": "",
-                        "error": "Chưa xử lý (đã dừng)" if self.processor.stop_requested else "Chưa xử lý",
-                        "success": False
-                    }
-            
-            if not self.processor.stop_requested and (GOONG_API_KEY != "blank" or OPENMAP_API_KEY != "blank"):
+            if not self.processor.stop_requested and failed_indices_set:
                 self.update_result_text(f"\n{'='*50}")
-                self.update_result_text("[TRY] Đang thử geocoding cho địa chỉ lỗi...")
-                self.root.after(0, lambda: self.update_progress(85, 100, "Geocoding fallback..."))
+                self.update_result_text("[BƯỚC 3] XỬ LÝ ĐIA CHỈ BỊ LỖI, CHỈ GIỮ 3 CẤP CƠ BẢN")
+                self.update_result_text(f"{'='*50}")
+                self.root.after(0, lambda: self.update_progress(50, 100, "Bước 3..."))
                 
-                results_dict, geocoded_success, geocoded_failed = self.processor.geocode_fallback(
-                    addresses, results_dict, skipped_indices, is_multi_column, original_data
+                batch_results_2_3, step_2_3_success, step_2_3_failed, failed_indices_set = self.processor.process_batch_retry(
+                    addresses_no_street, results_dict, failed_indices_set
                 )
                 
-                if geocoded_success > 0 or geocoded_failed > 0:
-                    self.update_result_text(f"Geocoding thành công: {geocoded_success}/{geocoded_success + geocoded_failed} địa chỉ")
-                    total_successful += geocoded_success
-                    total_failed -= geocoded_success
-                else:
-                    self.update_result_text("Không có địa chỉ lỗi nào cần geocoding")
+                results_dict.update(batch_results_2_3)
+                cumulative_success += step_2_3_success
+                self.update_result_text(f"Bước này: {step_2_3_success} thành công, {step_2_3_failed} thất bại")
+                self.update_result_text(f"Tổng lũy kế: {cumulative_success} thành công, {total_addresses - cumulative_success} còn lại")
+            
+            if not self.processor.stop_requested and (GOONG_API_KEY != "blank" or OPENMAP_API_KEY != "blank"):
+                if failed_indices_set:
+                    self.update_result_text(f"\n{'='*50}")
+                    self.update_result_text("[BƯỚC 4-6] Tìm kiếm tọa độ để chuyển đổi")
+                    self.update_result_text(f"{'='*50}")
+                    self.root.after(0, lambda: self.update_progress(70, 100, "Đang tìm tọa độ..."))
+                    
+                    results_dict, geocoded_success = self.processor.geocode_fallback_openmap_goong(
+                        addresses_with_street, addresses_no_street, results_dict, failed_indices_set
+                    )
+                    
+                    if geocoded_success > 0:
+                        cumulative_success += geocoded_success
+                        self.update_result_text(f"Bước này: {geocoded_success} thành công")
+                        self.update_result_text(f"Tổng lũy kế: {cumulative_success} thành công, {total_addresses - cumulative_success} còn lại")
+            
+            if self.processor.stop_requested:
+                for i in range(total_addresses):
+                    if not results_dict[i].get("success", False) and results_dict[i].get("retryCount", 0) == 0:
+                        results_dict[i]["error"] = "Chưa xử lý (đã dừng)"
             
             all_results = [results_dict[i] for i in range(total_addresses)]
             
@@ -483,23 +471,24 @@ class AddressConverterApp:
             else:
                 self.root.after(0, lambda: self.update_progress(90, 100, "Đang lưu kết quả..."))
 
+            actual_successful = sum(1 for r in all_results if r.get("success", False))
+            actual_failed = sum(1 for r in all_results if not r.get("success", False) and "Chưa xử lý" not in r.get("error", ""))
             total_skipped = len(skipped_indices)
             total_not_processed = sum(1 for r in all_results if not r.get("success", False) and "Chưa xử lý" in r.get("error", ""))
             
+            conversion_elapsed = time.time() - conversion_start_time
+            
             self.update_result_text(f"\n{'='*50}")
             if self.processor.stop_requested:
-                self.update_result_text(f"ĐÃ DỪNG - TỔNG KẾT:")
+                self.update_result_text("ĐÃ DỪNG - TỔNG KẾT:")
             else:
-                self.update_result_text(f"TỔNG KẾT:")
-            self.update_result_text(f"  - Tổng số địa chỉ: {total_addresses}")
-            self.update_result_text(f"  - Thành công: {total_successful}")
-            self.update_result_text(f"  - Thất bại: {total_failed}")
-            if total_skipped > 0:
-                self.update_result_text(f"  - Bỏ qua (Số dư không đủ): {total_skipped}")
+                self.update_result_text("TỔNG KẾT:")
+            self.update_result_text(f"\t- Tổng số địa chỉ: {total_addresses}")
+            self.update_result_text(f"\t- Thành công: {actual_successful}")
+            self.update_result_text(f"\t- Thất bại: {actual_failed}")
             if total_not_processed > 0:
-                self.update_result_text(f"  - Chưa xử lý: {total_not_processed}")
-            if num_batches > 1:
-                self.update_result_text(f"  - Số lần gửi: {num_batches}")
+                self.update_result_text(f"\t- Chưa xử lý: {total_not_processed}")
+            self.update_result_text(f"\t- Tổng thời gian: {conversion_elapsed:.3f}s")
             self.update_result_text(f"{'='*50}\n")
             
             input_path = Path(input_file)
@@ -529,14 +518,14 @@ class AddressConverterApp:
             self.root.after(0, lambda: self.open_folder_btn.configure(state="normal"))
             
             if self.processor.stop_requested:
-                self.root.after(0, lambda s=total_successful, f=total_failed, sk=total_skipped, np=total_not_processed, fn=output_filename: messagebox.showinfo(
+                self.root.after(0, lambda s=actual_successful, f=actual_failed, sk=total_skipped, np=total_not_processed, fn=output_filename: messagebox.showinfo(
                     "Đã dừng", 
-                    f"Đã dừng và lưu kết quả!\n\nThành công: {s}\nThất bại: {f}\nBỏ qua: {sk}\nChưa xử lý: {np}\n\nFile kết quả: {fn}"
+                    f"Đã dừng và lưu kết quả!\n\nThành công: {s}\nThất bại: {f}\nChưa xử lý: {np}\n\nFile kết quả: {fn}"
                 ))
             else:
-                self.root.after(0, lambda s=total_successful, f=total_failed, sk=total_skipped, fn=output_filename: messagebox.showinfo(
+                self.root.after(0, lambda s=actual_successful, f=actual_failed, sk=total_skipped, fn=output_filename: messagebox.showinfo(
                     "Hoàn thành", 
-                    f"Chuyển đổi thành công!\n\nThành công: {s}\nThất bại: {f}\nBỏ qua: {sk}\n\nFile kết quả: {fn}"
+                    f"Chuyển đổi thành công!\n\nThành công: {s}\nThất bại: {f}\n\nFile kết quả: {fn}"
                 ))
             
         except requests.exceptions.Timeout:

@@ -39,7 +39,7 @@ def test_utils_import():
     print("\n[OK] Testing utils module...")
     
     try:
-        import utils
+        import modules.utils as utils
         print("[OK] utils module imported successfully")
         
         required_constants = [
