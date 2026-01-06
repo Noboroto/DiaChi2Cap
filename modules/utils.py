@@ -9,7 +9,7 @@ import urllib.parse
 
 
 TEST_API_KEY = "testing-chuyen-doi-2-cap"
-API_DOMAIN_PROD = "https://address-converter.io.vn"
+API_DOMAIN_PROD = "https://diachi.io"
 API_DOMAIN_TEST = "http://localhost:5000"
 GOONG_API_KEY = "blank" 
 OPENMAP_API_KEY =  "blank"

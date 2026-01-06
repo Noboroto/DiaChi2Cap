@@ -379,7 +379,7 @@ class AddressConverterApp:
                 num_headers = len(headers) if headers else 0
                 self.update_result_text(f"[ĐỊA CHỈ NHIỀU CỘT] Đã phát hiện định dạng {num_headers} cột")
             else:
-                self.update_result_text(f"[ĐỊA CHỈ ĐƠN] Đã phát hiện định dạng 1 cột")
+                self.update_result_text("[ĐỊA CHỈ ĐƠN] Đã phát hiện định dạng 1 cột")
             
             if pre_converted_indices:
                 self.update_result_text(f"[PRE] Đã áp dụng chuyển đổi có sẵn cho {len(pre_converted_indices)} địa chỉ")
