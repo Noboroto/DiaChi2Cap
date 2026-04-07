@@ -23,7 +23,7 @@
 
 ### Bước 1: Tạo môi trường
 ```powershell
-cd d:\Github\Code-Python\DiaChi2Cap
+cd DiaChi2Cap
 conda create -n dia-chi-2-cap python=3.11 -y
 conda activate dia-chi-2-cap
 ```
@@ -277,10 +277,6 @@ Các địa chỉ khác sẽ trả về lỗi.
 ## API Reference
 
 Xem chi tiết tại [guide.md](guide.md)
-
-## License
-
-MIT
 
 ## Tác giả
 
